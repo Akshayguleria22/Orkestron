@@ -45,8 +45,9 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        sans: ["var(--font-inter)", "var(--font-space)", "system-ui", "sans-serif"],
+        display: ["var(--font-space)", "var(--font-inter)", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "Fira Code", "monospace"],
       },
       keyframes: {
         "pulse-glow": {
