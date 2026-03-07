@@ -180,6 +180,57 @@ class Invoice(Base):
 
 
 # ---------------------------------------------------------------------------
+# Phase 6 — Agent Capability Marketplace models
+# ---------------------------------------------------------------------------
+
+class Developer(Base):
+    """
+    Third-party developer account.
+    Developers register agents and publish capabilities into the marketplace.
+    """
+
+    __tablename__ = "developers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    developer_id = Column(String(128), nullable=False, unique=True, index=True)
+    name = Column(String(256), nullable=False)
+    email = Column(String(256), nullable=False, unique=True, index=True)
+    api_key = Column(String(128), nullable=False, unique=True, index=True)
+    status = Column(String(32), nullable=False, default="active")  # active | suspended | revoked
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class AgentCapability(Base):
+    """
+    Published capability that an agent exposes.
+    Links an agent_id to a named capability with schema and endpoint metadata.
+    Developers register capabilities; the orchestrator discovers them at runtime.
+    """
+
+    __tablename__ = "agent_capabilities"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    capability_id = Column(String(128), nullable=False, unique=True, index=True)
+    agent_id = Column(String(128), nullable=False, index=True)
+    developer_id = Column(String(128), nullable=False, index=True)
+    capability_name = Column(String(128), nullable=False, index=True)
+    description = Column(Text, nullable=False, default="")
+    input_schema = Column(JSON, nullable=False, default=dict)
+    output_schema = Column(JSON, nullable=False, default=dict)
+    endpoint = Column(String(512), nullable=True)
+    version = Column(String(32), nullable=False, default="1.0.0")
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
 # DB initialization — must be after ALL models so metadata includes everything
 # ---------------------------------------------------------------------------
 

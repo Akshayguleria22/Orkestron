@@ -6,6 +6,11 @@ keyword fallback. Acts as the first node in the LangGraph orchestration
 graph — it classifies user intent and sets the `intent` field in state
 which downstream edges use for routing.
 
+Phase 6: after intent classification, queries the Agent Discovery Engine
+to find the best agent for the corresponding capability. The discovered
+agent metadata is placed in state["discovered_agent"] so downstream
+nodes can use it.
+
 Valid intents: purchase, information, negotiation, compliance, execution
 """
 
@@ -94,16 +99,32 @@ async def route(user_id: str, tenant_id: str, task_input: str) -> Dict[str, str]
 # ---- LangGraph node ----
 def node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Graph entry node — classify intent and initialise workflow metadata.
-    Writes: intent, agent_path, iteration_count.
+    Graph entry node — classify intent, discover agent, initialise metadata.
+    Phase 6: queries the capability registry to find the best agent for
+    the classified intent, enabling dynamic third-party agent routing.
+    Writes: intent, discovered_agent, agent_path, iteration_count.
     """
     intent = _classify_intent_llm(state["input"])
+
+    # Phase 6: dynamic agent discovery via capability registry
+    discovered_agent = None
+    try:
+        from app.agents.agent_discovery import discover_agents_for_intent_sync
+        discovered_agent = discover_agents_for_intent_sync(intent)
+        if discovered_agent:
+            log.info(
+                "Discovered agent '%s' for intent '%s' (source=%s)",
+                discovered_agent["agent_id"], intent, discovered_agent.get("source"),
+            )
+    except Exception as exc:
+        log.warning("Agent discovery failed, using defaults: %s", exc)
 
     path = list(state.get("agent_path", []))
     path.append("supervisor")
 
     return {
         "intent": intent,
+        "discovered_agent": discovered_agent,
         "agent_path": path,
         "iteration_count": state.get("iteration_count", 0),
     }

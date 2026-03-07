@@ -57,6 +57,9 @@ class GraphState(TypedDict, total=False):
     # --- Phase 5: Billing ---
     billing_entry: Optional[Dict[str, Any]]  # {entry_id, fee, pricing_model, ...}
 
+    # --- Phase 6: Agent Discovery ---
+    discovered_agent: Optional[Dict[str, Any]]  # {agent_id, capability, source, ...}
+
     # --- Audit ---
     audit_hash: Optional[str]
 

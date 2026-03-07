@@ -18,6 +18,9 @@ Phase 4 additions:
   - outcome_tracker_node: records transaction outcome + savings after executor
 Phase 5 additions:
   - billing_node: calculates fee based on pricing model and creates ledger entry
+Phase 6 additions:
+  - supervisor now writes discovered_agent to state via Agent Discovery Engine
+  - discovered_agent metadata is propagated through the graph for audit
 """
 
 import asyncio
@@ -258,6 +261,7 @@ def run_workflow(
         "outcome": None,
         "savings": 0.0,
         "billing_entry": None,
+        "discovered_agent": None,
         "audit_hash": None,
         "agent_path": [],
         "iteration_count": 0,
