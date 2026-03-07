@@ -8,7 +8,7 @@ import { generateLogEntry, mockLogs } from "@/lib/mock-data";
 import { Terminal, Pause, Play, ArrowDown } from "lucide-react";
 
 const levelColors: Record<string, string> = {
-  info: "text-blue-400",
+  info: "text-indigo-400",
   warn: "text-amber-400",
   error: "text-red-400",
   debug: "text-zinc-500",

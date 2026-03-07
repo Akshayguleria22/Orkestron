@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { mockAgents } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import {
@@ -58,7 +57,7 @@ export default function MarketplacePage() {
             placeholder="Search agents or capabilities…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-lg border border-white/[0.06] bg-white/[0.02] text-sm text-foreground placeholder:text-zinc-600 outline-none focus:border-blue-500/30 focus:ring-1 focus:ring-blue-500/20 transition-all"
+            className="w-full pl-9 pr-4 py-2 rounded-lg border border-white/[0.06] bg-white/[0.02] text-sm text-foreground placeholder:text-zinc-600 outline-none focus:border-indigo-500/30 focus:ring-1 focus:ring-indigo-500/20 transition-all"
           />
         </div>
         <div className="flex items-center gap-1">
@@ -84,19 +83,16 @@ export default function MarketplacePage() {
         {filtered.map((agent, i) => {
           const Icon = agentIcons[agent.type] || Zap;
           return (
-            <motion.div
+            <div
               key={agent.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
               className="group relative rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 hover:border-white/[0.1] hover:bg-white/[0.03] transition-all cursor-pointer"
             >
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center group-hover:border-blue-500/20 transition-colors">
-                    <Icon className="w-5 h-5 text-muted-foreground group-hover:text-blue-400 transition-colors" />
+                  <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center group-hover:border-indigo-500/20 transition-colors">
+                    <Icon className="w-5 h-5 text-muted-foreground group-hover:text-indigo-400 transition-colors" />
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold">{agent.name}</h3>
@@ -118,7 +114,7 @@ export default function MarketplacePage() {
                 {agent.capabilities.map((cap) => (
                   <span
                     key={cap}
-                    className="text-[10px] px-2 py-1 rounded-md bg-blue-500/5 border border-blue-500/10 text-blue-400/80"
+                    className="text-[10px] px-2 py-1 rounded-md bg-indigo-500/5 border border-indigo-500/10 text-indigo-400/80"
                   >
                     {cap.replace(/_/g, " ")}
                   </span>
@@ -139,11 +135,11 @@ export default function MarketplacePage() {
                     <span className="text-[11px] text-muted-foreground">{agent.successRate}% success</span>
                   </div>
                 </div>
-                <button className="px-3 py-1 rounded-md bg-blue-600/80 hover:bg-blue-600 text-[11px] font-medium text-white transition-colors">
+                <button className="px-3 py-1 rounded-md bg-indigo-600/80 hover:bg-indigo-600 text-[11px] font-medium text-white transition-colors">
                   Deploy
                 </button>
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>

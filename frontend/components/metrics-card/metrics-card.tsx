@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 
@@ -24,10 +23,7 @@ export function MetricsCard({
   className,
 }: MetricsCardProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+    <div
       className={cn(
         "relative group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 overflow-hidden",
         "hover:border-white/[0.1] hover:bg-white/[0.03] transition-all duration-300",
@@ -35,7 +31,7 @@ export function MetricsCard({
       )}
     >
       {/* Subtle gradient accent at top */}
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent" />
 
       <div className="flex items-start justify-between">
         <div className="space-y-3">
@@ -63,10 +59,10 @@ export function MetricsCard({
             <p className="text-xs text-muted-foreground">{subtitle}</p>
           )}
         </div>
-        <div className="p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06] group-hover:border-blue-500/20 transition-colors">
-          <Icon className="w-4 h-4 text-muted-foreground group-hover:text-blue-400 transition-colors" />
+        <div className="p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06] group-hover:border-indigo-500/20 transition-colors">
+          <Icon className="w-4 h-4 text-muted-foreground group-hover:text-indigo-400 transition-colors" />
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

@@ -185,16 +185,16 @@ export function CommandCenter({ onLaunchSimulation }: CommandCenterProps) {
                     <div className="px-2">
                       <button
                         onClick={executeSelected}
-                        className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-left"
+                        className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-left"
                       >
-                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                          <Sparkles className="w-4 h-4 text-blue-400" />
+                        <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                          <Sparkles className="w-4 h-4 text-indigo-400" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-blue-400">Launch AI Simulation</p>
+                          <p className="text-sm font-medium text-indigo-400">Launch AI Simulation</p>
                           <p className="text-xs text-muted-foreground truncate">&quot;{query}&quot;</p>
                         </div>
-                        <ArrowRight className="w-4 h-4 text-blue-400" />
+                        <ArrowRight className="w-4 h-4 text-indigo-400" />
                       </button>
                     </div>
                   ) : (

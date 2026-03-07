@@ -99,7 +99,7 @@ export function ReplayViewer({ workflow, className }: ReplayViewerProps) {
             className={cn(
               "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
               selectedWorkflow.id === wf.id
-                ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-400"
                 : "border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:bg-white/[0.04]"
             )}
           >
@@ -117,7 +117,7 @@ export function ReplayViewer({ workflow, className }: ReplayViewerProps) {
           <span>Status: <span className={cn(
             selectedWorkflow.status === "completed" ? "text-emerald-400" :
             selectedWorkflow.status === "failed" ? "text-red-400" :
-            selectedWorkflow.status === "running" ? "text-blue-400" : "text-zinc-400"
+            selectedWorkflow.status === "running" ? "text-indigo-400" : "text-zinc-400"
           )}>{selectedWorkflow.status}</span></span>
           {selectedWorkflow.savings && (
             <span>Savings: <span className="text-emerald-400">₹{selectedWorkflow.savings.toLocaleString()}</span></span>
@@ -130,7 +130,7 @@ export function ReplayViewer({ workflow, className }: ReplayViewerProps) {
         {replayStep < 0 ? (
           <button
             onClick={startReplay}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-all shadow-lg shadow-blue-600/20"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-lg shadow-indigo-600/20"
           >
             <Play className="w-3.5 h-3.5" />
             Start Replay
@@ -172,7 +172,7 @@ export function ReplayViewer({ workflow, className }: ReplayViewerProps) {
               className={cn(
                 "px-2 py-1 rounded border transition-colors",
                 speed === s
-                  ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                  ? "border-indigo-500/30 bg-indigo-500/10 text-indigo-400"
                   : "border-white/[0.06] text-zinc-500 hover:text-zinc-300"
               )}
             >
@@ -185,7 +185,7 @@ export function ReplayViewer({ workflow, className }: ReplayViewerProps) {
       {/* Progress bar */}
       <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
         <motion.div
-          className="h-full bg-blue-500 rounded-full"
+          className="h-full bg-indigo-500 rounded-full"
           animate={{ width: `${Math.max(0, (Math.min(replayStep, totalSteps) / totalSteps) * 100)}%` }}
           transition={{ duration: 0.3 }}
         />
@@ -219,7 +219,7 @@ export function ReplayViewer({ workflow, className }: ReplayViewerProps) {
                 transition={{ duration: 0.5 }}
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-500",
-                  isActive && "border-blue-500/30 bg-blue-500/[0.04] shadow-[0_0_20px_rgba(59,130,246,0.1)]",
+                  isActive && "border-indigo-500/30 bg-indigo-500/[0.04] shadow-[0_0_20px_rgba(99,102,241,0.1)]",
                   isCompleted && "border-white/[0.06] bg-white/[0.01]",
                   status === "pending" && "border-white/[0.04] bg-transparent opacity-40",
                   status === "error" && "border-red-500/30 bg-red-500/[0.04]"
@@ -228,7 +228,7 @@ export function ReplayViewer({ workflow, className }: ReplayViewerProps) {
                 <div
                   className={cn(
                     "w-9 h-9 rounded-lg flex items-center justify-center border shrink-0",
-                    isActive ? "border-blue-500/30 bg-blue-500/10" :
+                    isActive ? "border-indigo-500/30 bg-indigo-500/10" :
                     isCompleted ? "border-emerald-500/20 bg-emerald-500/5" :
                     "border-white/[0.06] bg-white/[0.02]"
                   )}
@@ -274,7 +274,7 @@ export function ReplayViewer({ workflow, className }: ReplayViewerProps) {
 
                 {isActive && (
                   <motion.div
-                    className="absolute inset-0 rounded-xl border border-blue-500/20"
+                    className="absolute inset-0 rounded-xl border border-indigo-500/20"
                     animate={{ opacity: [0, 0.3, 0] }}
                     transition={{ duration: 2, repeat: Infinity }}
                   />

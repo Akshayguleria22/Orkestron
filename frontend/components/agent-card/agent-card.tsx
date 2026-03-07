@@ -39,14 +39,14 @@ export function AgentCard({ agent, onClick, className }: AgentCardProps) {
         className
       )}
     >
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-              <Zap className="w-4 h-4 text-blue-400" />
+              <Zap className="w-4 h-4 text-indigo-400" />
             </div>
             <div
               className={cn(

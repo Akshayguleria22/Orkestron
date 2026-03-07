@@ -144,13 +144,13 @@ export function SimulationEngine({ onComplete, className, initialTask }: Simulat
               onKeyDown={(e) => e.key === "Enter" && startSimulation()}
               placeholder="Enter a task — e.g. Buy best 16GB RAM under ₹5,000"
               disabled={run?.status === "running"}
-              className="w-full pl-4 pr-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-blue-500/40 focus:ring-1 focus:ring-blue-500/20 transition-all disabled:opacity-50"
+              className="w-full pl-4 pr-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.03] text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-500/20 transition-all disabled:opacity-50"
             />
           </div>
           <button
             onClick={startSimulation}
             disabled={!taskInput.trim() || run?.status === "running"}
-            className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-blue-600/20"
+            className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
           >
             {run?.status === "running" ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -189,8 +189,8 @@ export function SimulationEngine({ onComplete, className, initialTask }: Simulat
                         isCompleted
                           ? "bg-gradient-to-b from-emerald-500/60 to-emerald-500/20"
                           : isActive
-                          ? "bg-gradient-to-b from-blue-500/60 to-blue-500/20"
-                          : "bg-white/[0.06]"
+                            ? "bg-gradient-to-b from-indigo-500/60 to-indigo-500/20"
+                            : "bg-white/[0.06]",
                       )}
                     />
                   </div>
@@ -207,12 +207,15 @@ export function SimulationEngine({ onComplete, className, initialTask }: Simulat
                 >
                   {/* Agent Card */}
                   <div
-                    onClick={() => !isPending && setExpandedStep(isExpanded ? null : idx)}
+                    onClick={() =>
+                      !isPending && setExpandedStep(isExpanded ? null : idx)
+                    }
                     className={cn(
                       "relative rounded-xl border p-4 cursor-pointer transition-all duration-500 overflow-hidden group",
-                      isActive && cn(agentBorders[step.agent], "bg-white/[0.03]"),
+                      isActive &&
+                        cn(agentBorders[step.agent], "bg-white/[0.03]"),
                       isCompleted && "border-white/[0.08] bg-white/[0.02]",
-                      isPending && "border-white/[0.04] bg-white/[0.01]"
+                      isPending && "border-white/[0.04] bg-white/[0.01]",
                     )}
                   >
                     {/* Active glow */}
@@ -220,7 +223,7 @@ export function SimulationEngine({ onComplete, className, initialTask }: Simulat
                       <motion.div
                         className={cn(
                           "absolute inset-0 bg-gradient-radial opacity-50",
-                          agentGlows[step.agent]
+                          agentGlows[step.agent],
                         )}
                         animate={{ opacity: [0.3, 0.6, 0.3] }}
                         transition={{ duration: 2, repeat: Infinity }}
@@ -232,17 +235,28 @@ export function SimulationEngine({ onComplete, className, initialTask }: Simulat
                       <div
                         className={cn(
                           "w-9 h-9 rounded-lg flex items-center justify-center border transition-all",
-                          isActive && cn("border-blue-500/30 bg-blue-500/10"),
-                          isCompleted && "border-emerald-500/30 bg-emerald-500/10",
-                          isPending && "border-white/[0.06] bg-white/[0.02]"
+                          isActive &&
+                            cn("border-indigo-500/30 bg-indigo-500/10"),
+                          isCompleted &&
+                            "border-emerald-500/30 bg-emerald-500/10",
+                          isPending && "border-white/[0.06] bg-white/[0.02]",
                         )}
                       >
                         {isActive ? (
                           <motion.div
                             animate={{ rotate: 360 }}
-                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                            transition={{
+                              duration: 2,
+                              repeat: Infinity,
+                              ease: "linear",
+                            }}
                           >
-                            <Loader2 className={cn("w-4 h-4", agentText[step.agent] || "text-blue-400")} />
+                            <Loader2
+                              className={cn(
+                                "w-4 h-4",
+                                agentText[step.agent] || "text-indigo-400",
+                              )}
+                            />
                           </motion.div>
                         ) : isCompleted ? (
                           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -253,17 +267,23 @@ export function SimulationEngine({ onComplete, className, initialTask }: Simulat
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className={cn(
-                            "text-sm font-semibold",
-                            isActive ? agentText[step.agent] : isCompleted ? "text-foreground" : "text-zinc-500"
-                          )}>
+                          <span
+                            className={cn(
+                              "text-sm font-semibold",
+                              isActive
+                                ? agentText[step.agent]
+                                : isCompleted
+                                  ? "text-foreground"
+                                  : "text-zinc-500",
+                            )}
+                          >
                             {step.agent}
                           </span>
                           {isActive && (
                             <motion.span
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
-                              className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                              className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
                             >
                               processing
                             </motion.span>
@@ -285,7 +305,7 @@ export function SimulationEngine({ onComplete, className, initialTask }: Simulat
                             <motion.span
                               animate={{ opacity: [1, 0] }}
                               transition={{ duration: 0.5, repeat: Infinity }}
-                              className="text-blue-400"
+                              className="text-indigo-400"
                             >
                               █
                             </motion.span>
@@ -293,125 +313,156 @@ export function SimulationEngine({ onComplete, className, initialTask }: Simulat
                         )}
                       </div>
 
-                      {(isCompleted || isActive) && step.intermediateResults && (
-                        <ChevronDown
-                          className={cn(
-                            "w-4 h-4 text-muted-foreground transition-transform",
-                            isExpanded && "rotate-180"
-                          )}
-                        />
-                      )}
+                      {(isCompleted || isActive) &&
+                        step.intermediateResults && (
+                          <ChevronDown
+                            className={cn(
+                              "w-4 h-4 text-muted-foreground transition-transform",
+                              isExpanded && "rotate-180",
+                            )}
+                          />
+                        )}
                     </div>
 
                     {/* Expanded Results */}
                     <AnimatePresence>
-                      {isExpanded && step.intermediateResults && (isCompleted || isActive) && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="mt-4 pt-3 border-t border-white/[0.04] space-y-2">
-                            {step.intermediateResults.map((result, ri) => (
-                              <motion.div
-                                key={ri}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: ri * 0.1 }}
-                                className="flex items-center justify-between text-xs"
-                              >
-                                <span className="text-muted-foreground">{result.label}</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-foreground">{result.value}</span>
-                                  {result.score !== undefined && (
-                                    <div className="w-16 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                                      <motion.div
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${result.score * 100}%` }}
-                                        transition={{ duration: 0.8, delay: ri * 0.1 }}
-                                        className={cn(
-                                          "h-full rounded-full",
-                                          result.score > 0.85
-                                            ? "bg-emerald-500"
-                                            : result.score > 0.75
-                                            ? "bg-blue-500"
-                                            : "bg-amber-500"
-                                        )}
-                                      />
-                                    </div>
-                                  )}
-                                </div>
-                              </motion.div>
-                            ))}
-                          </div>
-
-                          {/* Reasoning Trace */}
-                          {step.reasoning && (
-                            <div className="mt-4 pt-3 border-t border-white/[0.04]">
-                              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2 font-medium">
-                                Reasoning Trace
-                              </p>
-                              <div className="grid gap-2">
-                                {step.reasoning.map((r, ri) => (
-                                  <motion.div
-                                    key={ri}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: ri * 0.15 + 0.3 }}
-                                    className="rounded-lg border border-white/[0.04] bg-white/[0.01] p-3"
-                                  >
-                                    <div className="flex items-center justify-between mb-2">
-                                      <span className="text-xs font-medium text-foreground">
-                                        {r.vendor}
-                                      </span>
-                                      <span
-                                        className={cn(
-                                          "text-xs font-mono font-semibold",
-                                          r.score > 0.85
-                                            ? "text-emerald-400"
-                                            : r.score > 0.75
-                                            ? "text-blue-400"
-                                            : "text-amber-400"
-                                        )}
-                                      >
-                                        {r.score.toFixed(2)}
-                                      </span>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                      {r.attributes.map((attr, ai) => (
-                                        <div key={ai} className="text-[11px]">
-                                          <span className="text-zinc-500">{attr.label}: </span>
-                                          <span className="text-zinc-300">{attr.value}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    <div className="mt-2 w-full h-1 rounded-full bg-white/[0.06] overflow-hidden">
-                                      <motion.div
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${r.score * 100}%` }}
-                                        transition={{ duration: 1, delay: ri * 0.2 }}
-                                        className={cn(
-                                          "h-full rounded-full",
-                                          r.score > 0.85 ? "bg-emerald-500" : r.score > 0.75 ? "bg-blue-500" : "bg-amber-500"
-                                        )}
-                                      />
-                                    </div>
-                                  </motion.div>
-                                ))}
-                              </div>
+                      {isExpanded &&
+                        step.intermediateResults &&
+                        (isCompleted || isActive) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.3 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-4 pt-3 border-t border-white/[0.04] space-y-2">
+                              {step.intermediateResults.map((result, ri) => (
+                                <motion.div
+                                  key={ri}
+                                  initial={{ opacity: 0, x: -10 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: ri * 0.1 }}
+                                  className="flex items-center justify-between text-xs"
+                                >
+                                  <span className="text-muted-foreground">
+                                    {result.label}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-foreground">
+                                      {result.value}
+                                    </span>
+                                    {result.score !== undefined && (
+                                      <div className="w-16 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                                        <motion.div
+                                          initial={{ width: 0 }}
+                                          animate={{
+                                            width: `${result.score * 100}%`,
+                                          }}
+                                          transition={{
+                                            duration: 0.8,
+                                            delay: ri * 0.1,
+                                          }}
+                                          className={cn(
+                                            "h-full rounded-full",
+                                            result.score > 0.85
+                                              ? "bg-emerald-500"
+                                              : result.score > 0.75
+                                                ? "bg-indigo-500"
+                                                : "bg-amber-500",
+                                          )}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </motion.div>
+                              ))}
                             </div>
-                          )}
-                        </motion.div>
-                      )}
+
+                            {/* Reasoning Trace */}
+                            {step.reasoning && (
+                              <div className="mt-4 pt-3 border-t border-white/[0.04]">
+                                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2 font-medium">
+                                  Reasoning Trace
+                                </p>
+                                <div className="grid gap-2">
+                                  {step.reasoning.map((r, ri) => (
+                                    <motion.div
+                                      key={ri}
+                                      initial={{ opacity: 0, y: 10 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      transition={{ delay: ri * 0.15 + 0.3 }}
+                                      className="rounded-lg border border-white/[0.04] bg-white/[0.01] p-3"
+                                    >
+                                      <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-medium text-foreground">
+                                          {r.vendor}
+                                        </span>
+                                        <span
+                                          className={cn(
+                                            "text-xs font-mono font-semibold",
+                                            r.score > 0.85
+                                              ? "text-emerald-400"
+                                              : r.score > 0.75
+                                                ? "text-indigo-400"
+                                                : "text-amber-400",
+                                          )}
+                                        >
+                                          {r.score.toFixed(2)}
+                                        </span>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2">
+                                        {r.attributes.map((attr, ai) => (
+                                          <div key={ai} className="text-[11px]">
+                                            <span className="text-zinc-500">
+                                              {attr.label}:{" "}
+                                            </span>
+                                            <span className="text-zinc-300">
+                                              {attr.value}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className="mt-2 w-full h-1 rounded-full bg-white/[0.06] overflow-hidden">
+                                        <motion.div
+                                          initial={{ width: 0 }}
+                                          animate={{
+                                            width: `${r.score * 100}%`,
+                                          }}
+                                          transition={{
+                                            duration: 1,
+                                            delay: ri * 0.2,
+                                          }}
+                                          className={cn(
+                                            "h-full rounded-full",
+                                            r.score > 0.85
+                                              ? "bg-emerald-500"
+                                              : r.score > 0.75
+                                                ? "bg-indigo-500"
+                                                : "bg-amber-500",
+                                          )}
+                                        />
+                                      </div>
+                                    </motion.div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
                     </AnimatePresence>
 
                     {/* Pulse ring for active */}
                     {isActive && (
                       <motion.div
-                        className={cn("absolute inset-0 rounded-xl border", agentBorders[step.agent])}
-                        animate={{ opacity: [0, 0.4, 0], scale: [1, 1.02, 1.04] }}
+                        className={cn(
+                          "absolute inset-0 rounded-xl border",
+                          agentBorders[step.agent],
+                        )}
+                        animate={{
+                          opacity: [0, 0.4, 0],
+                          scale: [1, 1.02, 1.04],
+                        }}
                         transition={{ duration: 2, repeat: Infinity }}
                       />
                     )}
@@ -435,16 +486,24 @@ export function SimulationEngine({ onComplete, className, initialTask }: Simulat
                     <Trophy className="w-4 h-4 text-emerald-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-emerald-400">Workflow Complete</p>
-                    <p className="text-xs text-muted-foreground">All agents executed successfully</p>
+                    <p className="text-sm font-semibold text-emerald-400">
+                      Workflow Complete
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      All agents executed successfully
+                    </p>
                   </div>
                 </div>
                 {run.finalOutcome && (
-                  <p className="text-sm text-foreground mb-2">{run.finalOutcome}</p>
+                  <p className="text-sm text-foreground mb-2">
+                    {run.finalOutcome}
+                  </p>
                 )}
                 {run.totalSavings && (
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">Total Savings:</span>
+                    <span className="text-muted-foreground">
+                      Total Savings:
+                    </span>
                     <span className="font-mono font-semibold text-emerald-400">
                       ₹{run.totalSavings.toLocaleString()}
                     </span>

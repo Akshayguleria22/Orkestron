@@ -46,8 +46,8 @@ export function ArchitectureDiagram() {
           }}
           className="flex items-center gap-3 px-6 py-3 rounded-xl border bg-white/[0.02] transition-all"
         >
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-            <Brain className="w-4 h-4 text-blue-400" />
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+            <Brain className="w-4 h-4 text-indigo-400" />
           </div>
           <div>
             <p className="text-sm font-medium">User Task Input</p>
@@ -109,7 +109,7 @@ export function ArchitectureDiagram() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: [0, 0.3, 0] }}
                   transition={{ duration: 2, repeat: Infinity }}
-                  className="absolute inset-0 rounded-xl border border-blue-500/10"
+                  className="absolute inset-0 rounded-xl border border-indigo-500/10"
                 />
               )}
             </motion.div>

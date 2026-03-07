@@ -30,10 +30,10 @@ const statusStyles: Record<string, { border: string; bg: string; glow: string; t
     text: "text-emerald-400",
   },
   active: {
-    border: "border-blue-500/40",
-    bg: "bg-blue-500/5",
-    glow: "shadow-[0_0_30px_rgba(59,130,246,0.2)]",
-    text: "text-blue-400",
+    border: "border-indigo-500/40",
+    bg: "bg-indigo-500/5",
+    glow: "shadow-[0_0_30px_rgba(99,102,241,0.2)]",
+    text: "text-indigo-400",
   },
   pending: {
     border: "border-white/[0.06]",
@@ -73,7 +73,7 @@ function AgentNodeComponent({ data }: NodeProps<{ label: string; status: string 
       >
         <div className={cn(
           "w-8 h-8 rounded-lg flex items-center justify-center border transition-colors duration-500",
-          data.status === "active" ? "border-blue-500/20 bg-blue-500/10" :
+          data.status === "active" ? "border-indigo-500/20 bg-indigo-500/10" :
           data.status === "completed" ? "border-emerald-500/20 bg-emerald-500/10" :
           "border-white/[0.06] bg-white/[0.03]"
         )}>
@@ -89,7 +89,7 @@ function AgentNodeComponent({ data }: NodeProps<{ label: string; status: string 
         {/* Pulse ring for active nodes */}
         {data.status === "active" && (
           <motion.div
-            className="absolute inset-0 rounded-xl border border-blue-500/20"
+            className="absolute inset-0 rounded-xl border border-indigo-500/20"
             animate={{ opacity: [0, 0.5, 0], scale: [1, 1.04, 1.08] }}
             transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
           />

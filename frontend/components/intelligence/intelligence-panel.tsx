@@ -51,8 +51,8 @@ export function IntelligencePanel({ className }: { className?: string }) {
           label: "Active Workflows",
           value: `${mockHealth.activeWorkflows + Math.floor(Math.random() * 5)}`,
           icon: Workflow,
-          color: "text-blue-400",
-          pulseColor: "bg-blue-500",
+          color: "text-indigo-400",
+          pulseColor: "bg-indigo-500",
         },
         {
           label: "Marketplace Agents",
@@ -79,8 +79,8 @@ export function IntelligencePanel({ className }: { className?: string }) {
           label: "Avg Latency",
           value: `${mockHealth.avgLatency + Math.floor(Math.random() * 20)}ms`,
           icon: Clock,
-          color: "text-blue-400",
-          pulseColor: "bg-blue-500",
+          color: "text-indigo-400",
+          pulseColor: "bg-indigo-500",
         },
         {
           label: "CPU Usage",
@@ -110,7 +110,7 @@ export function IntelligencePanel({ className }: { className?: string }) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04]">
         <div className="flex items-center gap-2">
-          <Activity className="w-3.5 h-3.5 text-blue-400" />
+          <Activity className="w-3.5 h-3.5 text-indigo-400" />
           <span className="text-xs font-semibold">System Intelligence</span>
         </div>
         <div className="flex items-center gap-1.5">
