@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { mockWorkflows } from "@/lib/mock-data";
 import { cn, formatDuration } from "@/lib/utils";
 import {
@@ -18,6 +18,8 @@ import {
   Zap,
 } from "lucide-react";
 import type { Workflow, WorkflowNode } from "@/lib/types";
+import { api } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 
 /* ── Agent icon mapping ── */
 const agentIcons: Record<string, typeof Brain> = {
@@ -128,8 +130,39 @@ const statusIcon = (status: string) => {
 };
 
 export default function ObservatoryPage() {
-  const completedWorkflows = mockWorkflows.filter(
-    (w) => w.status === "completed" || w.status === "failed"
+  const { getToken } = useAuth();
+  const [workflows, setWorkflows] = useState<Workflow[]>(mockWorkflows);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    api
+      .listWorkflows(token)
+      .then((d) => {
+        if (d.workflows && d.workflows.length > 0) {
+          const mapped: Workflow[] = d.workflows.map((w) => ({
+            id: (w.id as string) || "",
+            taskInput: (w.name as string) || (w.task_input as string) || "",
+            intent: (w.intent as string) || "general",
+            status: ((w.status as string) || "completed") as Workflow["status"],
+            nodes: Array.isArray(w.nodes)
+              ? (w.nodes as WorkflowNode[])
+              : mockWorkflows[0].nodes,
+            createdAt: (w.created_at as string) || new Date().toISOString(),
+            completedAt: (w.completed_at as string) || undefined,
+            duration: (w.duration as number) || undefined,
+            userId: (w.user_id as string) || "",
+            outcome: (w.outcome as string) || undefined,
+            savings: (w.savings as number) || undefined,
+          }));
+          setWorkflows([...mapped, ...mockWorkflows]);
+        }
+      })
+      .catch(() => {});
+  }, [getToken]);
+
+  const completedWorkflows = workflows.filter(
+    (w) => w.status === "completed" || w.status === "failed",
   );
   const [selected, setSelected] = useState<Workflow>(completedWorkflows[0]);
   const [expandedNode, setExpandedNode] = useState<string | null>(

@@ -31,7 +31,13 @@ _embedder: SentenceTransformer | None = None
 def _get_client() -> QdrantClient:
     global _client
     if _client is None:
-        _client = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
+        if settings.qdrant_endpoint:
+            _client = QdrantClient(
+                url=settings.qdrant_endpoint,
+                api_key=settings.qdrant_api_key or None,
+            )
+        else:
+            _client = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
     return _client
 
 

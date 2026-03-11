@@ -1,5 +1,6 @@
 # Environment variables
 .env
+backend/.env
 
 # Python
 __pycache__/
@@ -8,11 +9,13 @@ __pycache__/
 dist/
 build/
 *.egg
+.pytest_cache/
 
 # Virtual environment
 .venv/
 venv/
 env/
+backend/.venv/
 
 # Node / Frontend
 node_modules/

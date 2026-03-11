@@ -8,7 +8,7 @@ Phase 5: adds BillingLedgerEntry and Invoice tables for outcome-based billing.
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSON
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -223,6 +223,124 @@ class AgentCapability(Base):
     output_schema = Column(JSON, nullable=False, default=dict)
     endpoint = Column(String(512), nullable=True)
     version = Column(String(32), nullable=False, default="1.0.0")
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 — User accounts (OAuth2 + local)
+# ---------------------------------------------------------------------------
+
+class User(Base):
+    """
+    User account — supports OAuth2 (Google, GitHub) and local login.
+    """
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(256), nullable=False, unique=True, index=True)
+    email = Column(String(256), nullable=True, index=True)
+    name = Column(String(256), nullable=True)
+    avatar_url = Column(String(512), nullable=True)
+    provider = Column(String(32), nullable=False, default="local")  # google | github | local
+    password_hash = Column(String(256), nullable=True)  # for local accounts
+    role = Column(String(32), nullable=False, default="user")  # user | admin
+    is_active = Column(Boolean, nullable=False, default=True)
+    last_login = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 — Saved Workflows
+# ---------------------------------------------------------------------------
+
+class SavedWorkflow(Base):
+    """
+    User-created workflow definitions (from the n8n-style builder).
+    Stores the full React Flow graph as JSON.
+    """
+
+    __tablename__ = "saved_workflows"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    workflow_id = Column(String(128), nullable=False, unique=True, index=True)
+    user_id = Column(String(256), nullable=False, index=True)
+    name = Column(String(256), nullable=False)
+    description = Column(Text, nullable=True)
+    graph_json = Column(JSON, nullable=False, default=dict)  # {nodes, edges}
+    status = Column(String(32), nullable=False, default="draft")  # draft | active | archived
+    version = Column(Integer, nullable=False, default=1)
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 — Workflow Execution Runs
+# ---------------------------------------------------------------------------
+
+class WorkflowRun(Base):
+    """
+    Records of workflow executions with per-node results.
+    """
+
+    __tablename__ = "workflow_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(128), nullable=False, unique=True, index=True)
+    workflow_id = Column(String(128), nullable=False, index=True)
+    user_id = Column(String(256), nullable=False, index=True)
+    status = Column(String(32), nullable=False, default="pending")  # pending | running | completed | failed
+    node_results = Column(JSON, nullable=False, default=dict)  # {node_id: {status, output, duration}}
+    total_duration = Column(Float, nullable=True)
+    error_message = Column(Text, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 — Product / Vendor Inventory (Real Data)
+# ---------------------------------------------------------------------------
+
+class Product(Base):
+    """
+    Individual product in vendor inventory for real data queries.
+    """
+
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    product_id = Column(String(128), nullable=False, unique=True, index=True)
+    vendor_id = Column(String(128), nullable=False, index=True)
+    name = Column(String(256), nullable=False)
+    category = Column(String(128), nullable=False, index=True)
+    price = Column(Float, nullable=False)
+    currency = Column(String(8), nullable=False, default="INR")
+    specs = Column(JSON, nullable=False, default=dict)
+    stock = Column(Integer, nullable=False, default=0)
+    rating = Column(Float, nullable=False, default=0.0)
+    is_available = Column(Boolean, nullable=False, default=True)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

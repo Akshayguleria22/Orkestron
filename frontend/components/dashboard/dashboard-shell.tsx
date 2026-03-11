@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { StatusBar } from "./status-bar";
 import { CommandCenter } from "@/components/command-center/command-center";
+import { useAuth } from "@/lib/auth-context";
 
 type NavSection = {
   title?: string;
@@ -62,6 +63,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const router = useRouter();
+  const { user, logout, isAuthenticated } = useAuth();
 
   const handleLaunchSimulation = () => {
     router.push("/dashboard/simulate");
@@ -134,15 +136,41 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        {/* Collapse toggle */}
-        <div className="p-2 border-t border-white/[0.06]">
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors w-full"
-          >
-            <ChevronLeft className={cn("w-4 h-4 transition-transform duration-200", collapsed && "rotate-180")} />
-            {!collapsed && <span>Collapse</span>}
-          </button>
+        {/* User + Collapse */}
+        <div className="border-t border-white/[0.06]">
+          {isAuthenticated && user && (
+            <div className="p-2">
+              <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-white/[0.04] transition-colors group">
+                <div className="w-6 h-6 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0 text-[10px] font-bold text-indigo-300">
+                  {user.name?.[0]?.toUpperCase() || "U"}
+                </div>
+                {!collapsed && (
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{user.name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+                  </div>
+                )}
+                {!collapsed && (
+                  <button
+                    onClick={async () => { await logout(); router.push("/login"); }}
+                    className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors"
+                    title="Sign out"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="p-2">
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors w-full"
+            >
+              <ChevronLeft className={cn("w-4 h-4 transition-transform duration-200", collapsed && "rotate-180")} />
+              {!collapsed && <span>Collapse</span>}
+            </button>
+          </div>
         </div>
       </aside>
 

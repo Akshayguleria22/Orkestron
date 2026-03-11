@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   AreaChart,
   Area,
@@ -26,7 +27,10 @@ import {
   CheckCircle,
   Clock,
   RotateCcw,
+  Info,
 } from "lucide-react";
+import { api } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 
 const statusIcons: Record<string, typeof CheckCircle> = {
   charged: CheckCircle,
@@ -43,13 +47,61 @@ const statusColors: Record<string, string> = {
  * Billing dashboard — revenue metrics, ledger charts, billing events table.
  */
 export default function BillingPage() {
-  const totalRevenue = mockLedger.reduce((sum, e) => sum + e.revenue, 0);
-  const totalCosts = mockLedger.reduce((sum, e) => sum + e.costs, 0);
+  const { getToken, user } = useAuth();
+  const [ledger, setLedger] = useState(mockLedger);
+  const [billingEvents, setBillingEvents] = useState(mockBillingEvents);
+  const [isDemo, setIsDemo] = useState(true);
+  const [revenueData, setRevenueData] = useState<
+    Record<string, unknown>[] | null
+  >(null);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    const userId = user?.id || "system";
+
+    api
+      .getLedger(token, userId)
+      .then((d) => {
+        const entries =
+          (d as Record<string, unknown>).entries ??
+          (d as Record<string, unknown>).ledger ??
+          d;
+        if (Array.isArray(entries) && entries.length > 0) {
+          setLedger(entries as typeof mockLedger);
+          setIsDemo(false);
+        }
+      })
+      .catch(() => {});
+
+    api
+      .getRevenue(token, 30)
+      .then((d) => {
+        if (d.revenue && d.revenue.length > 0) setRevenueData(d.revenue);
+      })
+      .catch(() => {});
+  }, [getToken, user]);
+
+  const totalRevenue = ledger.reduce((sum, e) => sum + (e.revenue || 0), 0);
+  const totalCosts = ledger.reduce((sum, e) => sum + (e.costs || 0), 0);
   const net = totalRevenue - totalCosts;
-  const pendingCount = mockBillingEvents.filter((e) => e.status === "pending").length;
+  const pendingCount = billingEvents.filter(
+    (e) => e.status === "pending",
+  ).length;
 
   return (
     <div className="space-y-6 max-w-[1400px]">
+      {isDemo && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs">
+          <Info className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            Showing demo billing data — run workflows to generate real billing
+            events.
+          </span>
+        </div>
+      )}
+
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Billing</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -77,13 +129,19 @@ export default function BillingPage() {
         />
         <MetricsCard
           title="Billing Events"
-          value={mockBillingEvents.length.toString()}
+          value={billingEvents.length.toString()}
           icon={Receipt}
           subtitle={`${pendingCount} pending`}
         />
         <MetricsCard
           title="Avg Transaction"
-          value={formatCurrency(totalRevenue / mockLedger.reduce((s, e) => s + e.transactionCount, 0))}
+          value={formatCurrency(
+            totalRevenue /
+              Math.max(
+                ledger.reduce((s, e) => s + (e.transactionCount || 0), 0),
+                1,
+              ),
+          )}
           icon={CreditCard}
           subtitle="Per workflow"
         />
@@ -96,7 +154,9 @@ export default function BillingPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-sm font-semibold">Revenue vs Costs</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">30-day ledger overview</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                30-day ledger overview
+              </p>
             </div>
             <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-1.5">
@@ -111,14 +171,25 @@ export default function BillingPage() {
           </div>
           <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mockLedger}>
+              <AreaChart data={ledger}>
                 <defs>
                   <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="rgb(99, 102, 241)" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="rgb(99, 102, 241)" stopOpacity={0} />
+                    <stop
+                      offset="5%"
+                      stopColor="rgb(99, 102, 241)"
+                      stopOpacity={0.15}
+                    />
+                    <stop
+                      offset="95%"
+                      stopColor="rgb(99, 102, 241)"
+                      stopOpacity={0}
+                    />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="rgba(255,255,255,0.03)"
+                />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }}
@@ -142,8 +213,20 @@ export default function BillingPage() {
                   formatter={(value: number) => [`$${value.toLocaleString()}`]}
                   labelStyle={{ color: "rgba(255,255,255,0.5)" }}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="rgb(99, 102, 241)" strokeWidth={2} fill="url(#revGrad)" />
-                <Area type="monotone" dataKey="costs" stroke="rgba(239, 68, 68, 0.5)" strokeWidth={1.5} fill="rgba(239, 68, 68, 0.05)" />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="rgb(99, 102, 241)"
+                  strokeWidth={2}
+                  fill="url(#revGrad)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="costs"
+                  stroke="rgba(239, 68, 68, 0.5)"
+                  strokeWidth={1.5}
+                  fill="rgba(239, 68, 68, 0.05)"
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -153,12 +236,17 @@ export default function BillingPage() {
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
           <div className="mb-6">
             <h3 className="text-sm font-semibold">Net Earnings Trend</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Daily net profit</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Daily net profit
+            </p>
           </div>
           <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockLedger}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+              <LineChart data={ledger}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="rgba(255,255,255,0.03)"
+                />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }}
@@ -179,10 +267,19 @@ export default function BillingPage() {
                     borderRadius: "8px",
                     fontSize: "12px",
                   }}
-                  formatter={(value: number) => [`$${value.toLocaleString()}`, "Net"]}
+                  formatter={(value: number) => [
+                    `$${value.toLocaleString()}`,
+                    "Net",
+                  ]}
                   labelStyle={{ color: "rgba(255,255,255,0.5)" }}
                 />
-                <Line type="monotone" dataKey="net" stroke="rgb(34, 197, 94)" strokeWidth={2} dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="net"
+                  stroke="rgb(34, 197, 94)"
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -207,15 +304,19 @@ export default function BillingPage() {
 
         {/* Rows */}
         <div className="divide-y divide-white/[0.03]">
-          {mockBillingEvents.map((event) => {
+          {billingEvents.map((event) => {
             const StatusIcon = statusIcons[event.status] || CheckCircle;
             return (
               <div
                 key={event.id}
                 className="grid grid-cols-6 gap-4 px-5 py-3 items-center hover:bg-white/[0.02] transition-colors"
               >
-                <span className="text-xs font-mono text-muted-foreground">{event.id}</span>
-                <span className="text-xs font-mono text-muted-foreground">{event.workflowId}</span>
+                <span className="text-xs font-mono text-muted-foreground">
+                  {event.id}
+                </span>
+                <span className="text-xs font-mono text-muted-foreground">
+                  {event.workflowId}
+                </span>
                 <span className="text-xs capitalize text-muted-foreground">
                   {event.pricingModel.replace(/_/g, " ")}
                 </span>
@@ -223,8 +324,15 @@ export default function BillingPage() {
                   {formatCurrency(event.amount)}
                 </span>
                 <div className="flex items-center gap-1.5">
-                  <StatusIcon className={cn("w-3 h-3", statusColors[event.status])} />
-                  <span className={cn("text-xs capitalize", statusColors[event.status])}>
+                  <StatusIcon
+                    className={cn("w-3 h-3", statusColors[event.status])}
+                  />
+                  <span
+                    className={cn(
+                      "text-xs capitalize",
+                      statusColors[event.status],
+                    )}
+                  >
                     {event.status}
                   </span>
                 </div>

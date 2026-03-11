@@ -88,20 +88,23 @@ cp .env.example .env
 ### 3. Start infrastructure
 
 ```bash
-# Core services (PostgreSQL, Redis, Qdrant)
-docker-compose up -d postgres redis qdrant
+# Core services (PostgreSQL on port 5433, Redis, Qdrant)
+docker compose up -d postgres redis qdrant
 
 # Full stack including monitoring (Prometheus, Grafana, Loki)
-docker-compose up -d
+docker compose up -d
 ```
+
+> **Note:** PostgreSQL is mapped to port **5433** to avoid conflicts with local PostgreSQL installations.
 
 ### 4. Install Python dependencies
 
 ```bash
+cd backend
 python -m venv .venv
 
 # Windows
-.venv\Scripts\activate
+.venv\Scripts\Activate.ps1
 
 # Linux/macOS
 source .venv/bin/activate
@@ -112,7 +115,8 @@ pip install -r requirements.txt
 ### 5. Run the API server
 
 ```bash
-uvicorn app.main:app --reload
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 The API is now live at **http://localhost:8000**.
@@ -126,7 +130,7 @@ The API is now live at **http://localhost:8000**.
 | Service    | Port  | URL                          |
 |------------|-------|------------------------------|
 | API        | 8000  | http://localhost:8000        |
-| PostgreSQL | 5432  | —                            |
+| PostgreSQL | 5433  | —                            |
 | Redis      | 6379  | —                            |
 | Qdrant     | 6333  | http://localhost:6333        |
 | Prometheus | 9090  | http://localhost:9090        |
@@ -138,7 +142,7 @@ The API is now live at **http://localhost:8000**.
 ### Docker Build
 
 ```bash
-docker build -t orkestron .
+docker build -t orkestron ./backend
 docker run -p 8000:8000 --env-file .env orkestron
 ```
 
@@ -222,6 +226,7 @@ curl -s -X POST http://localhost:8000/task \
 Or run the demo script:
 
 ```bash
+cd backend
 python scripts/demo_workflow.py
 ```
 
@@ -231,69 +236,34 @@ python scripts/demo_workflow.py
 
 ```
 orkestron/
-├── app/
-│   ├── main.py                        # FastAPI gateway (v0.7.0)
-│   ├── config.py                      # Environment configuration
-│   ├── agents/
-│   │   ├── supervisor.py              # Intent classifier + agent discovery
-│   │   ├── retrieval.py               # Vector search agent
-│   │   ├── negotiation.py             # Vendor negotiation agent
-│   │   ├── compliance.py              # Policy validation agent
-│   │   ├── executor.py                # Transaction execution agent
-│   │   ├── orchestrator.py            # LangGraph StateGraph builder
-│   │   ├── state.py                   # Shared state schema (27 fields)
-│   │   ├── capability_registry.py     # Agent capability publishing
-│   │   ├── agent_discovery.py         # Dynamic agent discovery engine
-│   │   └── plugin_loader.py           # Third-party plugin loader
-│   ├── auth/
-│   │   ├── auth_service.py            # JWT authentication
-│   │   └── token_service.py           # Delegation token service
-│   ├── audit/
-│   │   └── logger.py                  # SHA-256 proof-of-action logger
-│   ├── billing/
-│   │   ├── billing_engine.py          # Outcome-based fee calculation
-│   │   ├── ledger.py                  # Immutable billing ledger
-│   │   ├── invoice_service.py         # Invoice generation
-│   │   └── pricing_models.py          # Pricing model definitions
-│   ├── cache/
-│   │   └── semantic_cache.py          # Redis semantic cache
-│   ├── developers/
-│   │   └── developer_service.py       # Third-party developer management
-│   ├── identity/
-│   │   └── agent_registry.py          # Agent identity registry
-│   ├── marketplace/
-│   │   ├── vendor_registry.py         # Vendor profiles + seeding
-│   │   ├── offer_engine.py            # Competitive offer generation
-│   │   └── negotiation_engine.py      # Multi-round negotiation
-│   ├── memory/
-│   │   └── vector_store.py            # Multi-tenant Qdrant memory
-│   ├── models/
-│   │   └── db.py                      # SQLAlchemy ORM models
-│   ├── observability/
-│   │   ├── metrics.py                 # Prometheus metrics
-│   │   └── logger.py                  # Structured JSON logging
-│   ├── outcomes/
-│   │   └── outcome_tracker.py         # Transaction outcome recording
-│   ├── security/
-│   │   └── permission_engine.py       # 3-layer authorization
-│   └── services/
-│       └── tools.py                   # Tool execution layer
-├── monitoring/
-│   ├── prometheus/prometheus.yml      # Prometheus scrape config
-│   ├── grafana/
-│   │   ├── provisioning/              # Auto-provisioned datasources
-│   │   └── dashboards/                # Pre-built dashboards
-│   ├── loki/loki-config.yml           # Loki log storage config
-│   └── promtail/promtail-config.yml   # Log shipping config
-├── tests/                             # Test suite
-├── scripts/
-│   └── demo_workflow.py               # Demo script
-├── docs/
-│   └── architecture.md                # Architecture documentation
-├── .github/workflows/ci.yml           # CI/CD pipeline
-├── docker-compose.yml                 # Infrastructure + monitoring
-├── Dockerfile                         # Application container
-├── requirements.txt                   # Python dependencies
+├── backend/                           # FastAPI backend
+│   ├── app/
+│   │   ├── main.py                    # FastAPI gateway (v0.8.0)
+│   │   ├── config.py                  # Environment configuration
+│   │   ├── agents/                    # AI agent modules
+│   │   ├── auth/                      # JWT + OAuth2 authentication
+│   │   ├── audit/                     # SHA-256 proof-of-action logger
+│   │   ├── billing/                   # Outcome-based billing engine
+│   │   ├── cache/                     # Redis semantic cache
+│   │   ├── developers/               # Third-party developer management
+│   │   ├── identity/                  # Agent identity registry
+│   │   ├── marketplace/              # Vendor marketplace + negotiation
+│   │   ├── memory/                    # Multi-tenant Qdrant memory
+│   │   ├── models/                    # SQLAlchemy ORM models
+│   │   ├── observability/            # Prometheus metrics + logging
+│   │   ├── outcomes/                  # Transaction outcome tracking
+│   │   ├── security/                  # Permission engine + rate limiter
+│   │   └── services/                  # Product, workflow, analytics services
+│   ├── tests/                         # Test suite
+│   ├── scripts/                       # Demo scripts
+│   ├── Dockerfile                     # Backend container
+│   └── requirements.txt              # Python dependencies
+├── frontend/                          # Next.js 14 dashboard
+├── monitoring/                        # Prometheus, Grafana, Loki configs
+├── deploy/nginx/                      # Nginx reverse proxy config
+├── docs/                              # Architecture documentation
+├── .github/workflows/                 # CI/CD pipeline
+├── docker-compose.yml                # Infrastructure services
 ├── .env.example                       # Environment template
 └── README.md                          # This file
 ```
@@ -303,6 +273,8 @@ orkestron/
 ## Testing
 
 ```bash
+cd backend
+
 # Install test dependencies
 pip install pytest pytest-asyncio httpx
 

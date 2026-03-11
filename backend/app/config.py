@@ -3,7 +3,15 @@ Configuration module — loads all environment variables via pydantic-settings.
 Single source of truth for connection strings and API keys.
 """
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
+
+# Resolve .env: check backend/.env first, then project root .env
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_ENV_FILE = _BACKEND_DIR / ".env"
+if not _ENV_FILE.exists():
+    _ENV_FILE = _BACKEND_DIR.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -37,6 +45,8 @@ class Settings(BaseSettings):
     # --- Qdrant ---
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
+    qdrant_api_key: str = ""
+    qdrant_endpoint: str = ""
 
     # --- Semantic cache ---
     cache_similarity_threshold: float = 0.9
@@ -49,8 +59,25 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiry_minutes: int = 60
     delegation_token_expiry_minutes: int = 15
+    refresh_token_expiry_days: int = 30
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    # --- OAuth2 Providers ---
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    oauth_redirect_base: str = "http://localhost:3000"
+
+    # --- Rate Limiting ---
+    rate_limit_per_minute: int = 60
+
+    # --- CORS ---
+    cors_origins: str = "http://localhost:3000,http://localhost:8000"
+
+    # --- WebSocket ---
+    ws_heartbeat_interval: int = 30
+
+    model_config = {"env_file": str(_ENV_FILE), "env_file_encoding": "utf-8"}
 
 
 settings = Settings()

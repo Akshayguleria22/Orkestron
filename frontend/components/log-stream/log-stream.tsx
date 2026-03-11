@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { LogEntry } from "@/lib/types";
 import { generateLogEntry, mockLogs } from "@/lib/mock-data";
-import { Terminal, Pause, Play, ArrowDown } from "lucide-react";
+import { Terminal, Pause, Play, ArrowDown, Info } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
 const levelColors: Record<string, string> = {
   info: "text-indigo-400",
@@ -27,19 +28,73 @@ const agentColors: Record<string, string> = {
  * Real-time log stream viewer styled like a terminal.
  * Streams mock logs at configurable intervals.
  */
-export function LogStream({ className, maxHeight }: { className?: string; maxHeight?: string }) {
+export function LogStream({
+  className,
+  maxHeight,
+}: {
+  className?: string;
+  maxHeight?: string;
+}) {
+  const { user } = useAuth();
   const [logs, setLogs] = useState<LogEntry[]>(mockLogs);
   const [isPaused, setIsPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [wsConnected, setWsConnected] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
+  // Try connecting to WebSocket for real logs
   useEffect(() => {
-    if (isPaused) return;
+    if (!user?.id) return;
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+    try {
+      const ws = new WebSocket(`${wsUrl}/ws/${user.id}`);
+      wsRef.current = ws;
+      ws.onopen = () => setWsConnected(true);
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "pong") return;
+          const entry: LogEntry = {
+            id: msg.id || crypto.randomUUID(),
+            timestamp: msg.timestamp || new Date().toISOString(),
+            level: msg.level || msg.event || "info",
+            agent: msg.agent || msg.node_id || "System",
+            message: msg.message || msg.event || JSON.stringify(msg.data || {}),
+            workflowId: msg.run_id,
+          };
+          if (!isPaused) {
+            setLogs((prev) => [...prev.slice(-200), entry]);
+          }
+        } catch {}
+      };
+      ws.onclose = () => setWsConnected(false);
+      ws.onerror = () => ws.close();
+
+      // Heartbeat
+      const hb = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify({ type: "ping" }));
+        else clearInterval(hb);
+      }, 30000);
+
+      return () => {
+        clearInterval(hb);
+        ws.close();
+      };
+    } catch {
+      return;
+    }
+  }, [user?.id]);
+
+  // Fallback: generate mock logs if no WS connection
+  useEffect(() => {
+    if (isPaused || wsConnected) return;
     const interval = setInterval(() => {
       setLogs((prev) => [...prev.slice(-200), generateLogEntry()]);
     }, 1800);
     return () => clearInterval(interval);
-  }, [isPaused]);
+  }, [isPaused, wsConnected]);
 
   useEffect(() => {
     if (autoScroll && containerRef.current) {
@@ -54,15 +109,34 @@ export function LogStream({ className, maxHeight }: { className?: string; maxHei
   };
 
   return (
-    <div className={cn("flex flex-col rounded-xl border border-white/[0.06] bg-black/40 overflow-hidden", className)}>
+    <div
+      className={cn(
+        "flex flex-col rounded-xl border border-white/[0.06] bg-black/40 overflow-hidden",
+        className,
+      )}
+    >
       {/* Terminal header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] bg-white/[0.02]">
         <div className="flex items-center gap-2">
           <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground">Live Agent Logs</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            Live Agent Logs
+          </span>
           <div className="flex items-center gap-1 ml-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-emerald-400/70">streaming</span>
+            <div
+              className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                wsConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500",
+              )}
+            />
+            <span
+              className={cn(
+                "text-[10px]",
+                wsConnected ? "text-emerald-400/70" : "text-amber-400/70",
+              )}
+            >
+              {wsConnected ? "live" : "demo"}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -79,7 +153,9 @@ export function LogStream({ className, maxHeight }: { className?: string; maxHei
           <button
             onClick={() => {
               setAutoScroll(true);
-              if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
+              if (containerRef.current)
+                containerRef.current.scrollTop =
+                  containerRef.current.scrollHeight;
             }}
             className="p-1.5 rounded-md hover:bg-white/[0.06] transition-colors"
           >
@@ -105,15 +181,29 @@ export function LogStream({ className, maxHeight }: { className?: string; maxHei
               className="log-line flex items-start gap-3 border-b border-white/[0.02]"
             >
               <span className="text-[10px] text-zinc-600 font-mono shrink-0 w-[72px] pt-0.5">
-                {new Date(log.timestamp).toLocaleTimeString("en-US", { hour12: false })}
+                {new Date(log.timestamp).toLocaleTimeString("en-US", {
+                  hour12: false,
+                })}
               </span>
-              <span className={cn("text-[10px] font-medium uppercase tracking-wider w-[36px] shrink-0 pt-0.5", levelColors[log.level])}>
+              <span
+                className={cn(
+                  "text-[10px] font-medium uppercase tracking-wider w-[36px] shrink-0 pt-0.5",
+                  levelColors[log.level],
+                )}
+              >
                 {log.level}
               </span>
-              <span className={cn("text-xs font-medium shrink-0 w-[130px]", agentColors[log.agent] || "text-zinc-400")}>
+              <span
+                className={cn(
+                  "text-xs font-medium shrink-0 w-[130px]",
+                  agentColors[log.agent] || "text-zinc-400",
+                )}
+              >
                 [{log.agent}]
               </span>
-              <span className="text-xs text-zinc-400 break-all">{log.message}</span>
+              <span className="text-xs text-zinc-400 break-all">
+                {log.message}
+              </span>
             </motion.div>
           ))}
         </AnimatePresence>
@@ -121,7 +211,9 @@ export function LogStream({ className, maxHeight }: { className?: string; maxHei
 
       {/* Footer */}
       <div className="px-4 py-1.5 border-t border-white/[0.06] bg-white/[0.01]">
-        <span className="text-[10px] text-zinc-600 font-mono">{logs.length} entries</span>
+        <span className="text-[10px] text-zinc-600 font-mono">
+          {logs.length} entries
+        </span>
       </div>
     </div>
   );
