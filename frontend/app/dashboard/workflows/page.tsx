@@ -37,6 +37,8 @@ import { useAuth } from "@/lib/auth-context";
 // Helper to cast node data
 type BNode = Node & { data: BuilderNodeData };
 const asB = (n: Node): BNode => n as BNode;
+const getWorkflowId = (wf: Record<string, unknown>): string =>
+  ((wf.workflow_id as string) || (wf.id as string) || "").trim();
 
 // ── Execution Simulation ──
 
@@ -124,7 +126,7 @@ export default function WorkflowsPage() {
       } else {
         const result = await api.createWorkflow(token, workflowName, graphJson);
         const wf = result.workflow;
-        setActiveWorkflowId((wf.id as string) || null);
+        setActiveWorkflowId(getWorkflowId(wf) || null);
       }
       await fetchWorkflows();
     } catch (err) {
@@ -137,7 +139,7 @@ export default function WorkflowsPage() {
   // Load a saved workflow
   const loadWorkflow = useCallback(
     (wf: Record<string, unknown>) => {
-      setActiveWorkflowId(wf.id as string);
+      setActiveWorkflowId(getWorkflowId(wf));
       setWorkflowName((wf.name as string) || "Workflow");
       const graph = wf.graph_json as Record<string, unknown> | undefined;
       if (graph?.nodes && graph?.edges) {
@@ -742,10 +744,10 @@ export default function WorkflowsPage() {
             ) : (
               savedWorkflows.map((wf) => (
                 <div
-                  key={wf.id as string}
+                  key={getWorkflowId(wf)}
                   className={cn(
                     "flex items-center justify-between px-4 py-2.5 border-b border-white/[0.03] hover:bg-white/[0.03] transition-colors cursor-pointer",
-                    activeWorkflowId === (wf.id as string) &&
+                    activeWorkflowId === getWorkflowId(wf) &&
                       "bg-indigo-500/5 border-l-2 border-l-indigo-500",
                   )}
                 >
@@ -757,13 +759,13 @@ export default function WorkflowsPage() {
                       {(wf.name as string) || "Untitled"}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      {(wf.id as string)?.slice(0, 12)}...
+                      {getWorkflowId(wf)?.slice(0, 12)}...
                     </p>
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      deleteWorkflow(wf.id as string);
+                      deleteWorkflow(getWorkflowId(wf));
                     }}
                     className="p-1 text-muted-foreground hover:text-red-400 transition-colors"
                   >

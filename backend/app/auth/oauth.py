@@ -11,10 +11,12 @@ from typing import Optional, Dict, Any
 
 import httpx
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.config import settings
 from app.auth.auth_service import create_user_token
 from app.auth.refresh_tokens import create_refresh_token, store_refresh_token
+from app.models.db import User, async_session
 
 
 # ---------------------------------------------------------------------------
@@ -209,8 +211,32 @@ async def handle_oauth_callback(
         name = user_info.get("name", "")
         avatar = ""
 
-    # TODO: Upsert user in database (create User model)
-    # For now we create tokens directly
+    # Upsert user in database
+    async with async_session() as session:
+        result = await session.execute(
+            select(User).where(User.user_id == user_id)
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.last_login = datetime.now(timezone.utc)
+            if email:
+                existing.email = email
+            if name:
+                existing.name = name
+            if avatar:
+                existing.avatar_url = avatar
+        else:
+            session.add(User(
+                user_id=user_id,
+                email=email or None,
+                name=name or user_id,
+                avatar_url=avatar or None,
+                provider=provider_name,
+                role="user",
+                is_active=True,
+                last_login=datetime.now(timezone.utc),
+            ))
+        await session.commit()
 
     # Create JWT access token
     access_token = create_user_token(

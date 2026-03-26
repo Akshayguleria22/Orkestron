@@ -1,5 +1,9 @@
 """
-LangGraph Orchestrator — stateful, cyclic multi-agent workflow engine.
+Legacy LangGraph Orchestrator — stateful, cyclic multi-agent workflow engine.
+
+NOTE: This module is retained only for backward compatibility with older tests
+and integrations. The active production task pipeline uses
+app.agents.dynamic_orchestrator via /tasks/real.
 
 Phase 4 graph topology:
     supervisor → retrieval → route_after_retrieval
@@ -223,8 +227,11 @@ def build_graph() -> StateGraph:
     return graph
 
 
-# Module-level compiled graph — import and call `.invoke(state)`
-workflow = build_graph().compile()
+# Module-level compiled graph (legacy) — import and call `.invoke(state)`
+legacy_workflow = build_graph().compile()
+
+# Backward-compatible alias for older imports.
+workflow = legacy_workflow
 
 
 def run_workflow(
@@ -268,5 +275,5 @@ def run_workflow(
         "authorization_error": None,
     }
 
-    result = workflow.invoke(initial_state)
+    result = legacy_workflow.invoke(initial_state)
     return dict(result)

@@ -117,6 +117,26 @@ async def get_agent(agent_id: str) -> Optional[Dict[str, Any]]:
         }
 
 
+async def list_agents() -> List[Dict[str, Any]]:
+    """List all registered agents."""
+    async with async_session() as session:
+        result = await session.execute(select(Agent).order_by(Agent.name.asc()))
+        agents = result.scalars().all()
+
+    return [
+        {
+            "agent_id": agent.agent_id,
+            "name": agent.name,
+            "capabilities": list(agent.capabilities),
+            "reputation_score": agent.reputation_score,
+            "status": "active",
+            "type": "worker",
+            "description": f"Registered agent with {len(agent.capabilities or [])} capabilities",
+        }
+        for agent in agents
+    ]
+
+
 async def verify_agent_capability(agent_id: str, capability: str) -> bool:
     """Return True if the agent is registered and has the given capability."""
     agent = await get_agent(agent_id)

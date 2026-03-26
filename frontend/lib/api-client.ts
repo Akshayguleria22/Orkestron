@@ -14,7 +14,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     if (res.status === 401) {
-      // Could trigger token refresh here
+      // Dispatch an event to log the user out on the frontend
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("orkestron:auth:unauthorized"));
+      }
       throw new Error("Unauthorized");
     }
     if (res.status === 429) {
@@ -69,7 +72,7 @@ export const api = {
 
   // ─── Tasks ───
   submitTask: (token: string, task: string) =>
-    request("/task", {
+    request("/tasks/real", {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify({ input: task }),
@@ -196,4 +199,169 @@ export const api = {
 
   // ─── Metrics ───
   getMetrics: () => request<string>("/metrics"),
+
+  // ─── Real Tasks ───
+  signup: (email: string, password: string, name: string) =>
+    request<{ access_token: string; user: Record<string, string> }>("/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({ email, password, name }),
+    }),
+
+  loginWithEmail: (email: string, password: string) =>
+    request<{ access_token: string; user: Record<string, string> }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  submitRealTask: (token: string, input: string) =>
+    request<{ task_id: string; status: string }>("/tasks/real", {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify({ input }),
+    }),
+
+  getRealTask: (token: string, taskId: string) =>
+    request<Record<string, unknown>>(`/tasks/real/${taskId}`, {
+      headers: authHeaders(token),
+    }),
+
+  listRealTasks: (token: string, status?: string, limit = 20) => {
+    const qs = new URLSearchParams();
+    if (status) qs.set("status", status);
+    qs.set("limit", String(limit));
+    return request<{ tasks: Record<string, unknown>[] }>(`/tasks/real?${qs}`, {
+      headers: authHeaders(token),
+    });
+  },
+
+  getTaskLogs: (token: string, taskId: string) =>
+    request<{ logs: Record<string, unknown>[] }>(`/tasks/real/${taskId}/logs`, {
+      headers: authHeaders(token),
+    }),
+
+  // ─── Marketplace Deploy ───
+  deployAgent: (token: string, agentId: string, config: Record<string, unknown> = {}) =>
+    request<{ status: string; deployment_id: string; agent_id: string; agent_name: string }>(
+      "/marketplace/deploy",
+      {
+        method: "POST",
+        headers: authHeaders(token),
+        body: JSON.stringify({ agent_id: agentId, config }),
+      }
+    ),
+
+  listDeployedAgents: (token: string) =>
+    request<{ deployed: Record<string, unknown>[] }>("/marketplace/deployed", {
+      headers: authHeaders(token),
+    }),
+
+  undeployAgent: (token: string, deploymentId: string) =>
+    request(`/marketplace/deploy/${deploymentId}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }),
+
+  // ─── Observatory ───
+  getTraces: (token: string, status?: string, limit = 50) => {
+    const qs = new URLSearchParams();
+    if (status) qs.set("status", status);
+    qs.set("limit", String(limit));
+    return request<{ traces: Record<string, unknown>[]; count: number }>(
+      `/observatory/traces?${qs}`,
+      { headers: authHeaders(token) }
+    );
+  },
+
+  getTrace: (token: string, traceId: string) =>
+    request<{ trace: Record<string, unknown> }>(`/observatory/traces/${traceId}`, {
+      headers: authHeaders(token),
+    }),
+
+  getObservatoryStats: (token: string) =>
+    request<{ stats: Record<string, unknown> }>("/observatory/stats", {
+      headers: authHeaders(token),
+    }),
+
+  // ─── Platform Agents (Real Agent Marketplace) ───
+  createPlatformAgent: (token: string, data: Record<string, unknown>) =>
+    request<{ status: string; agent: Record<string, unknown> }>("/platform/agents", {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }),
+
+  listPlatformAgents: (token: string, params?: {
+    category?: string;
+    agent_type?: string;
+    search?: string;
+    mine_only?: boolean;
+    limit?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) qs.set(k, String(v));
+      });
+    }
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<{ agents: Record<string, unknown>[]; count: number }>(
+      `/platform/agents${suffix}`,
+      { headers: authHeaders(token) }
+    );
+  },
+
+  listPublicAgents: (params?: { category?: string; search?: string }) => {
+    const qs = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) qs.set(k, String(v));
+      });
+    }
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<{ agents: Record<string, unknown>[]; count: number }>(
+      `/platform/agents/public${suffix}`
+    );
+  },
+
+  getPlatformAgent: (agentId: string) =>
+    request<{ agent: Record<string, unknown> }>(`/platform/agents/${agentId}`),
+
+  updatePlatformAgent: (token: string, agentId: string, data: Record<string, unknown>) =>
+    request<{ status: string; agent: Record<string, unknown> }>(`/platform/agents/${agentId}`, {
+      method: "PUT",
+      headers: authHeaders(token),
+      body: JSON.stringify(data),
+    }),
+
+  deletePlatformAgent: (token: string, agentId: string) =>
+    request(`/platform/agents/${agentId}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }),
+
+  executePlatformAgent: (token: string, agentId: string, input: string) =>
+    request<Record<string, unknown>>(`/platform/agents/${agentId}/execute`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify({ input }),
+    }),
+
+  listPlatformRuns: (token: string, agentId?: string, limit = 20) => {
+    const qs = new URLSearchParams();
+    if (agentId) qs.set("agent_id", agentId);
+    qs.set("limit", String(limit));
+    return request<{ runs: Record<string, unknown>[]; count: number }>(
+      `/platform/runs?${qs}`,
+      { headers: authHeaders(token) }
+    );
+  },
+
+  getPlatformRun: (token: string, runId: string) =>
+    request<{ run: Record<string, unknown> }>(`/platform/runs/${runId}`, {
+      headers: authHeaders(token),
+    }),
+
+  getMLTools: () =>
+    request<{ tools: Record<string, unknown>[]; count: number }>("/platform/ml-tools"),
 };
+

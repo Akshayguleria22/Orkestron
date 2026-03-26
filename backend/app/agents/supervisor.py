@@ -69,7 +69,7 @@ def _classify_intent_llm(text: str) -> str:
     try:
         client = Groq(api_key=settings.groq_api_key)
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": _INTENT_PROMPT.format(input=text)}],
             temperature=0,
             max_tokens=10,

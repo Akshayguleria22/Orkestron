@@ -3,21 +3,31 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { cn } from "@/lib/utils";
-import { Brain, Search, Handshake, Shield, Zap } from "lucide-react";
+import {
+  Brain,
+  Search,
+  Handshake,
+  Shield,
+  Zap,
+  Lightbulb,
+  BarChart3,
+  FileOutput,
+} from "lucide-react";
 
 export interface BuilderNodeData {
-  type: "supervisor" | "retrieval" | "negotiation" | "compliance" | "executor";
+  type: string;
   label: string;
   status: "idle" | "active" | "completed" | "error";
   config: Record<string, unknown>;
 }
 
 const handleColors: Record<string, string> = {
-  supervisor: "#6366F1",
-  retrieval: "#06B6D4",
-  negotiation: "#F59E0B",
-  compliance: "#22C55E",
-  executor: "#8B5CF6",
+  planner: "#6366F1",
+  web_search: "#06B6D4",
+  data_extraction: "#F59E0B",
+  reasoning: "#22C55E",
+  comparison: "#8B5CF6",
+  result_generator: "#F97316",
 };
 
 const nodeThemes: Record<
@@ -29,35 +39,41 @@ const nodeThemes: Record<
     iconText: string;
   }
 > = {
-  supervisor: {
+  planner: {
     icon: Brain,
     stripe: "bg-indigo-500",
     iconBg: "bg-indigo-500/10",
     iconText: "text-indigo-400",
   },
-  retrieval: {
+  web_search: {
     icon: Search,
     stripe: "bg-cyan-500",
     iconBg: "bg-cyan-500/10",
     iconText: "text-cyan-400",
   },
-  negotiation: {
+  data_extraction: {
     icon: Handshake,
     stripe: "bg-amber-500",
     iconBg: "bg-amber-500/10",
     iconText: "text-amber-400",
   },
-  compliance: {
-    icon: Shield,
+  reasoning: {
+    icon: Lightbulb,
     stripe: "bg-emerald-500",
     iconBg: "bg-emerald-500/10",
     iconText: "text-emerald-400",
   },
-  executor: {
-    icon: Zap,
+  comparison: {
+    icon: BarChart3,
     stripe: "bg-violet-500",
     iconBg: "bg-violet-500/10",
     iconText: "text-violet-400",
+  },
+  result_generator: {
+    icon: FileOutput,
+    stripe: "bg-orange-500",
+    iconBg: "bg-orange-500/10",
+    iconText: "text-orange-400",
   },
 };
 
@@ -71,9 +87,9 @@ function BuilderNodeComponent({
   data,
   selected,
 }: NodeProps<BuilderNodeData>) {
-  const theme = nodeThemes[data.type] || nodeThemes.supervisor;
+  const theme = nodeThemes[data.type] || nodeThemes.planner;
   const Icon = theme.icon;
-  const handleColor = handleColors[data.type] || handleColors.supervisor;
+  const handleColor = handleColors[data.type] || handleColors.planner;
 
   return (
     <>

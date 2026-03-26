@@ -3,7 +3,16 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import {
-  X, Brain, Search, Handshake, Shield, Zap, Sliders,
+  X,
+  Brain,
+  Search,
+  Handshake,
+  Shield,
+  Zap,
+  Sliders,
+  Lightbulb,
+  BarChart3,
+  FileOutput,
 } from "lucide-react";
 import type { BuilderNodeData } from "./builder-node";
 
@@ -27,53 +36,133 @@ interface FieldConfig {
 }
 
 const nodeConfigs: Record<string, FieldConfig[]> = {
-  supervisor: [
-    { key: "strategy", label: "Routing Strategy", type: "select", options: ["sequential", "parallel", "adaptive"], description: "How tasks are distributed" },
-    { key: "maxRetries", label: "Max Retries", type: "number", min: 0, max: 10, description: "Retry attempts on failure" },
-    { key: "timeout", label: "Timeout (s)", type: "number", min: 5, max: 300, description: "Max execution time" },
-    { key: "priority", label: "Priority", type: "select", options: ["low", "normal", "high", "critical"] },
+  planner: [
+    {
+      key: "strategy",
+      label: "Planning Strategy",
+      type: "select",
+      options: ["sequential", "parallel", "adaptive"],
+      description: "How steps are organized",
+    },
+    {
+      key: "maxRetries",
+      label: "Max Retries",
+      type: "number",
+      min: 0,
+      max: 10,
+      description: "Retry attempts on failure",
+    },
+    {
+      key: "timeout",
+      label: "Timeout (s)",
+      type: "number",
+      min: 5,
+      max: 300,
+      description: "Max execution time",
+    },
   ],
-  retrieval: [
-    { key: "topK", label: "Top-K Results", type: "number", min: 1, max: 50, description: "Number of results to retrieve" },
-    { key: "similarityThreshold", label: "Similarity Threshold", type: "slider", min: 0, max: 1, step: 0.05, description: "Minimum relevance score" },
-    { key: "sources", label: "Data Sources", type: "select", options: ["all", "vendors", "internal", "marketplace"] },
-    { key: "cacheEnabled", label: "Cache Results", type: "boolean", description: "Use semantic cache" },
+  web_search: [
+    {
+      key: "topK",
+      label: "Top-K Results",
+      type: "number",
+      min: 1,
+      max: 50,
+      description: "Number of results to retrieve",
+    },
+    {
+      key: "sources",
+      label: "Data Sources",
+      type: "select",
+      options: ["all", "web", "internal", "marketplace"],
+    },
+    {
+      key: "cacheEnabled",
+      label: "Cache Results",
+      type: "boolean",
+      description: "Use semantic cache",
+    },
   ],
-  negotiation: [
-    { key: "priceWeight", label: "Price Weight", type: "slider", min: 0, max: 1, step: 0.05, description: "Importance of price in scoring" },
-    { key: "ratingWeight", label: "Rating Weight", type: "slider", min: 0, max: 1, step: 0.05, description: "Importance of vendor rating" },
-    { key: "deliveryWeight", label: "Delivery Weight", type: "slider", min: 0, max: 1, step: 0.05, description: "Importance of delivery speed" },
-    { key: "maxRounds", label: "Max Negotiation Rounds", type: "number", min: 1, max: 10 },
-    { key: "minSavingsTarget", label: "Min Savings %", type: "number", min: 0, max: 50, description: "Target savings percentage" },
+  data_extraction: [
+    {
+      key: "format",
+      label: "Output Format",
+      type: "select",
+      options: ["json", "table", "raw"],
+      description: "Extraction output format",
+    },
+    {
+      key: "maxItems",
+      label: "Max Items",
+      type: "number",
+      min: 1,
+      max: 100,
+      description: "Max items to extract",
+    },
   ],
-  compliance: [
-    { key: "strictMode", label: "Strict Mode", type: "boolean", description: "Fail on any violation" },
-    { key: "ruleSet", label: "Rule Set", type: "select", options: ["default", "enterprise", "government", "custom"], description: "Policy rule set" },
-    { key: "budgetLimit", label: "Budget Limit ($)", type: "number", min: 0, max: 1000000, description: "Max allowed spend" },
-    { key: "requireApproval", label: "Require Approval", type: "boolean", description: "Human-in-the-loop approval" },
+  reasoning: [
+    {
+      key: "depth",
+      label: "Reasoning Depth",
+      type: "select",
+      options: ["shallow", "medium", "deep"],
+      description: "Depth of analysis",
+    },
+    {
+      key: "showChain",
+      label: "Show Chain-of-Thought",
+      type: "boolean",
+      description: "Include reasoning steps in output",
+    },
   ],
-  executor: [
-    { key: "executionMode", label: "Execution Mode", type: "select", options: ["auto", "confirm", "dry-run"], description: "How actions are executed" },
-    { key: "rollbackEnabled", label: "Rollback on Failure", type: "boolean", description: "Auto-rollback on error" },
-    { key: "notifyOnComplete", label: "Notify on Complete", type: "boolean", description: "Send completion notification" },
-    { key: "outputFormat", label: "Output Format", type: "select", options: ["json", "summary", "detailed"] },
+  comparison: [
+    {
+      key: "criteria",
+      label: "Comparison Criteria",
+      type: "text",
+      description: "Comma-separated criteria",
+    },
+    {
+      key: "rankingMethod",
+      label: "Ranking Method",
+      type: "select",
+      options: ["weighted", "pairwise", "score"],
+      description: "How options are ranked",
+    },
+  ],
+  result_generator: [
+    {
+      key: "outputFormat",
+      label: "Output Format",
+      type: "select",
+      options: ["json", "summary", "detailed", "markdown"],
+      description: "Final output format",
+    },
+    {
+      key: "includeMetadata",
+      label: "Include Metadata",
+      type: "boolean",
+      description: "Add execution metadata",
+    },
   ],
 };
 
 const icons: Record<string, typeof Brain> = {
-  supervisor: Brain,
-  retrieval: Search,
-  negotiation: Handshake,
-  compliance: Shield,
-  executor: Zap,
+  planner: Brain,
+  web_search: Search,
+  data_extraction: Handshake,
+  reasoning: Lightbulb,
+  comparison: BarChart3,
+  result_generator: FileOutput,
 };
 
 const iconColors: Record<string, string> = {
-  supervisor: "text-indigo-400",
-  retrieval: "text-cyan-400",
-  negotiation: "text-amber-400",
-  compliance: "text-emerald-400",
-  executor: "text-violet-400",
+  planner: "text-indigo-400",
+  web_search: "text-cyan-400",
+  data_extraction: "text-amber-400",
+  reasoning: "text-emerald-400",
+  comparison: "text-violet-400",
+  result_generator: "text-orange-400",
 };
 
 export function NodeConfigPanel({

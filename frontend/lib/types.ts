@@ -3,6 +3,62 @@
 export type AgentStatus = "active" | "idle" | "error" | "offline";
 export type WorkflowStatus = "running" | "completed" | "failed" | "pending";
 export type LogLevel = "info" | "warn" | "error" | "debug";
+export type RealTaskStatus = "pending" | "running" | "completed" | "failed";
+
+// ── Real Task Types ──
+
+export interface TaskStep {
+  step?: number;
+  agent: string;
+  action: string;
+  priority?: string;
+  depends_on?: number[];
+}
+
+export interface TaskSource {
+  title: string;
+  url: string;
+  snippet?: string;
+}
+
+export interface TaskResult {
+  summary?: string;
+  result_text?: string;
+  sources?: TaskSource[];
+  intermediate_results?: Record<string, unknown>[];
+  [key: string]: unknown;
+}
+
+export interface RealTask {
+  task_id: string;
+  input: string;
+  status: RealTaskStatus;
+  task_type?: string;
+  plan?: { task_type: string; steps: TaskStep[]; key_queries: string[] };
+  result?: TaskResult;
+  result_text?: string;
+  agent_path?: string[];
+  total_duration?: number;
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface AgentExecutionLog {
+  id: string;
+  task_id: string;
+  agent_type: string;
+  step_index: number;
+  status: string;
+  input_summary?: string;
+  output_summary?: string;
+  duration_ms?: number;
+  error?: string;
+  started_at: string;
+  completed_at?: string;
+}
+
+// ── Original Types ──
 
 export interface Agent {
   id: string;

@@ -17,6 +17,7 @@ if not _ENV_FILE.exists():
 class Settings(BaseSettings):
     # --- Groq (LLM provider) ---
     groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-120b"
 
     # --- PostgreSQL ---
     postgres_user: str = "orkestron"
@@ -76,6 +77,18 @@ class Settings(BaseSettings):
 
     # --- WebSocket ---
     ws_heartbeat_interval: int = 30
+
+    # --- Real Tool Layer ---
+    serper_api_key: str = ""  # serper.dev for web search
+    serpapi_api_key: str = ""  # serpapi.com alternative
+
+    # --- Email (SMTP or SendGrid) ---
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = "noreply@orkestron.ai"
+    sendgrid_api_key: str = ""
 
     model_config = {"env_file": str(_ENV_FILE), "env_file_encoding": "utf-8"}
 

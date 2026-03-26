@@ -415,7 +415,7 @@ Pre-provisioned dashboard: **Orkestron Overview**
 | ORM                | SQLAlchemy (async)          | 2.0.36      |
 | Cache              | Redis                       | 7-alpine    |
 | Vector Store       | Qdrant                      | 1.12.5      |
-| LLM Provider       | Groq (llama-3.1-8b-instant) | 1.0.0       |
+| LLM Provider       | Groq (openai/gpt-oss-120b) | 1.0.0       |
 | Embeddings         | SentenceTransformers        | 3.3.1       |
 | Metrics            | Prometheus                  | 2.51.0      |
 | Dashboards         | Grafana                     | 10.4.1      |

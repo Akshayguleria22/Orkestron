@@ -99,6 +99,32 @@ services:
       - loki
     restart: unless-stopped
 
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: orkestron-worker
+    command: python -m app.jobs.worker
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: orkestron2026
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: orkestron
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      JWT_SECRET: orkestron-dev-secret-change-in-prod
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pgdata:
   qdrantdata:

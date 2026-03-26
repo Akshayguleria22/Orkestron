@@ -2,23 +2,22 @@
 Orkestron — FastAPI API Gateway
 
 Single entry point for all task orchestration requests.
-Phase 8: Full Production — OAuth2, WebSocket, Rate Limiting, Real Data, Analytics.
-Flow: authenticate → delegate → cache check → LangGraph workflow
-      (vendor discovery → negotiation → compliance → execution → outcome → billing) → response.
+Production mode: authenticate → submit task → dynamic AI agent execution
+                 (planner → search/extraction → reasoning → comparison → result) → response.
 """
 
 import asyncio
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from sqlalchemy import select
 
-from app.agents.orchestrator import run_workflow
 from app.audit.logger import log_action
-from app.auth.auth_service import AuthenticationError, create_user_token, verify_user_token
-from app.auth.token_service import create_delegation_token
+from app.auth.auth_service import AuthenticationError, create_user_token, verify_user_token, signup_user, login_user
 from app.auth.oauth import get_authorize_url, handle_oauth_callback, OAuthError
 from app.auth.refresh_tokens import (
     create_refresh_token,
@@ -27,9 +26,9 @@ from app.auth.refresh_tokens import (
     revoke_refresh_token,
 )
 from app.cache.semantic_cache import check_cache, store_cache
-from app.identity.agent_registry import get_agent, register_agent, register_default_agents
-from app.marketplace.vendor_registry import list_vendors, seed_vendors
-from app.models.db import init_db
+from app.identity.agent_registry import get_agent, list_agents, register_agent, register_default_agents
+from app.marketplace.vendor_registry import list_vendors
+from app.models.db import init_db, Task, AgentExecutionLog, ExecutionTrace, MarketplaceDeployedAgent, async_session
 from app.outcomes.outcome_tracker import get_user_outcomes
 from app.billing.ledger import get_user_ledger
 from app.billing.invoice_service import generate_invoice, list_user_invoices, get_invoice_details
@@ -69,7 +68,7 @@ from app.observability.metrics import (
 # Phase 8 imports
 from app.config import settings
 from app.security.rate_limiter import RateLimitMiddleware
-from app.services.websocket_manager import manager as ws_manager, workflow_event, system_event
+from app.services.websocket_manager import manager as ws_manager, workflow_event
 from app.services.product_service import (
     get_products,
     get_product,
@@ -96,24 +95,55 @@ from app.services.analytics_service import (
     get_revenue_over_time,
     get_agent_usage,
 )
+from app.jobs.queue import enqueue_real_task_job
+
+# Phase 10 imports — Real Agent Marketplace
+from app.services.agent_deployment_service import (
+    create_agent as deploy_new_agent,
+    list_agents_for_user,
+    get_agent_by_id as get_deployable_agent,
+    update_agent as update_deployable_agent,
+    delete_agent as delete_deployable_agent,
+    execute_agent,
+    list_agent_runs,
+    get_agent_run,
+    seed_default_agents as seed_deployable_agents,
+)
+from app.tools.ml_tools import ML_TOOLS
 
 log = get_logger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Intent → delegation scope mapping
-# ---------------------------------------------------------------------------
-_INTENT_SCOPES = {
-    "purchase": ["purchase_item", "negotiate_price", "query_inventory"],
-    "negotiation": ["negotiate_price", "query_inventory"],
-    "information": ["query_inventory"],
-    "compliance": ["query_inventory"],
-    "execution": ["purchase_item", "query_inventory"],
-}
+async def _get_task_by_task_id(task_id: str) -> Optional[Task]:
+    """Fetch a task row by its public task_id value."""
+    async with async_session() as session:
+        result = await session.execute(select(Task).where(Task.task_id == task_id))
+        return result.scalar_one_or_none()
+
+
+def _serialize_real_task(task: Task) -> Dict[str, Any]:
+    """Convert a Task row into API response payload."""
+    result_payload = task.result if isinstance(task.result, dict) else {}
+    return {
+        "task_id": task.task_id,
+        "input": task.input_text,
+        "status": task.status,
+        "task_type": task.task_type,
+        "plan": task.plan,
+        "result": task.result,
+        "result_text": task.result_text,
+        "warnings": result_payload.get("warnings", []),
+        "step_errors": result_payload.get("step_errors", []),
+        "agent_path": task.agent_path,
+        "total_duration": task.total_duration,
+        "error_message": task.error_message,
+        "created_at": task.created_at.isoformat() if task.created_at else None,
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+    }
 
 
 # ---------------------------------------------------------------------------
-# Lifespan — DB migrations + agent registration + vendor seeding on startup
+# Lifespan — DB migrations + agent registration on startup
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -121,10 +151,10 @@ async def lifespan(app: FastAPI):
     log.info("Orkestron starting up")
     await init_db()
     await register_default_agents()
-    await seed_vendors()
     await seed_core_developer()
     await seed_capabilities()
     await seed_product_data()
+    await seed_deployable_agents()
     log.info("Orkestron ready")
     yield
     log.info("Orkestron shutting down")
@@ -209,34 +239,6 @@ class AgentRegisterRequest(BaseModel):
     capabilities: List[str]
 
 
-class TaskRequest(BaseModel):
-    input: str
-
-
-class TaskResponse(BaseModel):
-    status: str
-    intent: str
-    agent_path: List[str]
-    response: Optional[str]
-    # Marketplace fields (Phase 4)
-    result: Optional[str] = None
-    price: Optional[float] = None
-    vendor: Optional[str] = None
-    transaction_id: Optional[str] = None
-    proof_hash: Optional[str] = None
-    savings: Optional[float] = None
-    # Existing detail fields
-    negotiation_result: Optional[dict] = None
-    compliance_status: str = ""
-    compliance_violations: List[str] = []
-    tool_outputs: List[dict] = []
-    audit_hash: Optional[str] = None
-    delegation_token_id: Optional[str] = None
-    outcome: Optional[dict] = None
-    billing_entry: Optional[dict] = None
-    cached: bool
-
-
 class DeveloperRegisterRequest(BaseModel):
     name: str
     email: str
@@ -250,6 +252,23 @@ class CapabilityRegisterRequest(BaseModel):
     output_schema: dict = {}
     endpoint: str = ""
     version: str = "1.0.0"
+
+
+# ── Phase 9: Signup / Login / Real Task schemas ──
+
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+    name: str = ""
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class RealTaskRequest(BaseModel):
+    input: str
 
 
 async def get_current_developer(x_api_key: str = Header(default="")):
@@ -276,6 +295,245 @@ async def issue_token(req: TokenRequest):
         permissions=req.permissions,
     )
     return TokenResponse(access_token=token)
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/signup — create a new user account
+# ---------------------------------------------------------------------------
+@app.post("/auth/signup")
+async def signup_endpoint(req: SignupRequest):
+    """Register a new user with email and password."""
+    if not req.email or not req.password:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    try:
+        user_info = await signup_user(email=req.email, password=req.password, name=req.name)
+        # Auto-login: issue token
+        access_token = create_user_token(
+            user_id=user_info["user_id"],
+            tenant_id="default",
+            roles=["user"],
+            permissions=["submit_task", "view_workflows", "view_billing"],
+        )
+        # Issue refresh token (DB-backed)
+        refresh = create_refresh_token(user_id=user_info["user_id"])
+        await store_refresh_token(user_id=user_info["user_id"], token=refresh)
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh,
+            "token_type": "bearer",
+            "user": {
+                "id": user_info["user_id"],
+                "email": user_info["email"],
+                "name": user_info["name"],
+                "avatar": "",
+                "provider": "local",
+            },
+        }
+    except AuthenticationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/login — authenticate with email and password
+# ---------------------------------------------------------------------------
+@app.post("/auth/login")
+async def login_endpoint(req: LoginRequest):
+    """Authenticate a user with email and password."""
+    try:
+        result = await login_user(email=req.email, password=req.password)
+        # Issue DB-backed refresh token
+        refresh = create_refresh_token(user_id=result["user"]["id"])
+        await store_refresh_token(user_id=result["user"]["id"], token=refresh)
+        return {
+            "access_token": result["access_token"],
+            "refresh_token": refresh,
+            "token_type": "bearer",
+            "user": result["user"],
+        }
+    except AuthenticationError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# POST /tasks/real — submit a real task for AI agent processing
+# ---------------------------------------------------------------------------
+@app.post("/tasks/real")
+async def submit_real_task(req: RealTaskRequest, user=Depends(get_current_user)):
+    """Submit a natural language task that gets processed by real AI agents."""
+    user_id = user["sub"]
+
+    if not req.input or not req.input.strip():
+        raise HTTPException(status_code=400, detail="Task input cannot be empty")
+
+    task_id = f"task-{uuid.uuid4().hex[:12]}"
+
+    # Create task record
+    task = Task(
+        task_id=task_id,
+        user_id=user_id,
+        input_text=req.input.strip(),
+        status="pending",
+    )
+    try:
+        async with async_session() as session:
+            session.add(task)
+            await session.commit()
+    except Exception as exc:
+        log.error("Failed to create task: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to create task")
+
+    try:
+        job_id = enqueue_real_task_job(task_id=task_id, user_id=user_id, task_input=req.input.strip())
+        await _update_task_status(task_id=task_id, status="queued")
+    except Exception as exc:
+        log.error("Failed to enqueue task %s: %s", task_id, exc)
+        await _update_task_failure(task_id=task_id, error_message="Queue submission failed")
+        raise HTTPException(status_code=500, detail="Failed to enqueue task")
+
+    return {
+        "task_id": task_id,
+        "job_id": job_id,
+        "status": "queued",
+        "message": "Task queued. Poll GET /tasks/{task_id} or GET /tasks/real/{task_id} for status",
+    }
+
+
+async def _update_task_failure(task_id: str, error_message: str) -> None:
+    """Mark task as failed if queueing or startup processing fails."""
+    await _update_task_status(task_id=task_id, status="failed", error_message=error_message)
+
+
+async def _update_task_status(task_id: str, status: str, error_message: Optional[str] = None) -> None:
+    """Update task status and optional error message."""
+    try:
+        async with async_session() as session:
+            result = await session.execute(select(Task).where(Task.task_id == task_id))
+            task = result.scalar_one_or_none()
+            if task:
+                task.status = status
+                if error_message:
+                    task.error_message = error_message[:500]
+                await session.commit()
+    except Exception as exc:
+        log.warning("Failed to update task %s status=%s: %s", task_id, status, exc)
+
+
+# ---------------------------------------------------------------------------
+# GET /tasks/real/{task_id} — get status and result of a real task
+# ---------------------------------------------------------------------------
+@app.get("/tasks/real/{task_id}")
+async def get_real_task(task_id: str, user=Depends(get_current_user)):
+    """Get the status and result of a submitted task."""
+    task = await _get_task_by_task_id(task_id)
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.user_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return _serialize_real_task(task)
+
+
+# ---------------------------------------------------------------------------
+# GET /tasks/{task_id} — polling endpoint for queued task status/results
+# ---------------------------------------------------------------------------
+@app.get("/tasks/{task_id}")
+async def get_task(task_id: str, user=Depends(get_current_user)):
+    """Poll task status/result for asynchronous real-task execution."""
+    task = await _get_task_by_task_id(task_id)
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.user_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return _serialize_real_task(task)
+
+
+# ---------------------------------------------------------------------------
+# GET /tasks/real — list all tasks for the current user
+# ---------------------------------------------------------------------------
+@app.get("/tasks/real")
+async def list_real_tasks(
+    status: Optional[str] = None,
+    limit: int = 20,
+    user=Depends(get_current_user),
+):
+    """List tasks for the current user, optionally filtered by status."""
+    user_id = user["sub"]
+    async with async_session() as session:
+        query = select(Task).where(Task.user_id == user_id).order_by(Task.created_at.desc()).limit(min(limit, 100))
+        if status:
+            query = query.where(Task.status == status)
+        result = await session.execute(query)
+        tasks = result.scalars().all()
+
+    return {
+        "tasks": [
+            {
+                "task_id": t.task_id,
+                "input": t.input_text[:200],
+                "status": t.status,
+                "task_type": t.task_type,
+                "agent_path": t.agent_path,
+                "total_duration": t.total_duration,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+            }
+            for t in tasks
+        ],
+        "count": len(tasks),
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /tasks/real/{task_id}/logs — get execution logs for a task
+# ---------------------------------------------------------------------------
+@app.get("/tasks/real/{task_id}/logs")
+async def get_task_logs(task_id: str, user=Depends(get_current_user)):
+    """Get agent execution logs for a specific task."""
+    # Verify ownership
+    task = await _get_task_by_task_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.user_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(AgentExecutionLog)
+            .where(AgentExecutionLog.task_id == task_id)
+            .order_by(AgentExecutionLog.step_index)
+        )
+        logs = result.scalars().all()
+
+    return {
+        "task_id": task_id,
+        "logs": [
+            {
+                "log_id": l.log_id,
+                "agent_name": l.agent_name,
+                "agent_type": l.agent_type,
+                "step_index": l.step_index,
+                "status": l.status,
+                "latency_ms": l.latency_ms,
+                "tools_used": l.tools_used,
+                "error_message": l.error_message,
+            }
+            for l in logs
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /agents/registered — list all registered agents
+# ---------------------------------------------------------------------------
+@app.get("/agents/registered")
+async def list_agents_endpoint():
+    agents = await list_agents()
+    return {"agents": agents}
 
 
 # ---------------------------------------------------------------------------
@@ -363,116 +621,6 @@ async def get_outcomes_endpoint(user_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Cannot view other user's outcomes")
     outcomes = await get_user_outcomes(user_id)
     return {"outcomes": outcomes}
-
-
-# ---------------------------------------------------------------------------
-# POST /task — authenticated orchestration endpoint
-# ---------------------------------------------------------------------------
-@app.post("/task", response_model=TaskResponse)
-async def handle_task(req: TaskRequest, user=Depends(get_current_user)):
-    user_id: str = user["sub"]
-    tenant_id: str = user["tenant_id"]
-
-    # 1. Semantic cache lookup
-    cached_response = check_cache(req.input)
-    if cached_response is not None:
-        CACHE_HITS_TOTAL.inc()
-        audit_hash = await log_action(
-            user_id=user_id,
-            agent_name="cache",
-            action_summary=f"Cache hit for input: {req.input[:120]}",
-        )
-        return TaskResponse(
-            status="ok",
-            intent="cached",
-            agent_path=["cache"],
-            response=cached_response,
-            result=cached_response,
-            audit_hash=audit_hash,
-            proof_hash=audit_hash,
-            cached=True,
-        )
-
-    # 2. Classify intent for scope selection (quick keyword check)
-    from app.agents.supervisor import _classify_intent_keywords
-    intent_hint = _classify_intent_keywords(req.input)
-    scopes = _INTENT_SCOPES.get(intent_hint, ["query_inventory"])
-
-    # 3. Issue a short-lived delegation token for the executor agent
-    delegation = create_delegation_token(
-        user_id=user_id,
-        agent_id="agent-executor",
-        tenant_id=tenant_id,
-        scope=scopes,
-    )
-
-    CACHE_MISSES_TOTAL.inc()
-
-    # 4. Run the full LangGraph orchestration workflow
-    _wf_start = time.perf_counter()
-    result = run_workflow(
-        user_id=user_id,
-        tenant_id=tenant_id,
-        user_input=req.input,
-        delegation_token=delegation["token"],
-        delegation_token_id=delegation["token_id"],
-    )
-
-    _wf_elapsed = time.perf_counter() - _wf_start
-    _wf_intent = result.get("intent", "unknown")
-    AGENT_TASKS_TOTAL.labels(intent=_wf_intent).inc()
-    AGENT_EXECUTION_TIME.labels(intent=_wf_intent).observe(_wf_elapsed)
-
-    if result.get("execution_error"):
-        FAILED_WORKFLOWS_TOTAL.labels(error_type="execution").inc()
-    elif result.get("outcome") and result["outcome"].get("outcome_id") != "error":
-        SUCCESSFUL_OUTCOMES_TOTAL.inc()
-
-    if result.get("billing_entry"):
-        BILLING_EVENTS_TOTAL.labels(
-            pricing_model=result["billing_entry"].get("pricing_model", "unknown"),
-        ).inc()
-
-    log_workflow_event(
-        log, "Workflow completed",
-        user_id=user_id,
-        task_type=_wf_intent,
-        status="error" if result.get("execution_error") else "ok",
-    )
-
-    final_response = result.get("final_result", "")
-
-    # 5. Store in semantic cache
-    if final_response:
-        store_cache(query=req.input, response=final_response)
-
-    # 6. Extract marketplace transaction fields from workflow result
-    transaction: Dict[str, Any] = result.get("transaction") or {}
-    neg: Dict[str, Any] = result.get("negotiation_result") or {}
-
-    return TaskResponse(
-        status="ok",
-        intent=result.get("intent", ""),
-        agent_path=result.get("agent_path", []),
-        response=final_response,
-        # Phase 4 marketplace fields
-        result=final_response,
-        price=transaction.get("price") or neg.get("breakdown", {}).get("price_per_unit"),
-        vendor=transaction.get("vendor_name") or neg.get("vendor"),
-        transaction_id=transaction.get("transaction_id"),
-        proof_hash=result.get("audit_hash"),
-        savings=result.get("savings") or 0.0,
-        # Detail fields
-        negotiation_result=neg or None,
-        compliance_status=result.get("compliance_status", ""),
-        compliance_violations=result.get("compliance_violations", []),
-        tool_outputs=result.get("tool_outputs", []),
-        audit_hash=result.get("audit_hash"),
-        delegation_token_id=delegation["token_id"],
-        outcome=result.get("outcome"),
-        billing_entry=result.get("billing_entry"),
-        cached=False,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -938,6 +1086,191 @@ async def workflow_stats_endpoint(user=Depends(get_current_user)):
 
 
 # ===========================================================================
+# Marketplace Agent Deployment Endpoints
+# ===========================================================================
+
+class DeployAgentRequest(BaseModel):
+    agent_id: str
+    config: Dict[str, Any] = {}
+
+
+@app.post("/marketplace/deploy")
+async def deploy_agent_endpoint(req: DeployAgentRequest, user=Depends(get_current_user)):
+    """Deploy an agent from the marketplace for the current user."""
+    user_id = user["sub"]
+
+    # Verify the agent exists
+    agent = await get_agent(req.agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    deployment_id = f"deploy-{uuid.uuid4().hex[:12]}"
+    entry = MarketplaceDeployedAgent(
+        deployment_id=deployment_id,
+        user_id=user_id,
+        agent_id=req.agent_id,
+        agent_name=agent.get("name", req.agent_id),
+        status="active",
+        config=req.config,
+    )
+
+    async with async_session() as session:
+        session.add(entry)
+        await session.commit()
+
+    return {
+        "status": "deployed",
+        "deployment_id": deployment_id,
+        "agent_id": req.agent_id,
+        "agent_name": agent.get("name", req.agent_id),
+    }
+
+
+@app.get("/marketplace/deployed")
+async def list_deployed_agents(user=Depends(get_current_user)):
+    """List all agents the current user has deployed."""
+    user_id = user["sub"]
+    async with async_session() as session:
+        result = await session.execute(
+            select(MarketplaceDeployedAgent)
+            .where(MarketplaceDeployedAgent.user_id == user_id)
+            .order_by(MarketplaceDeployedAgent.deployed_at.desc())
+        )
+        deployments = result.scalars().all()
+
+    return {
+        "deployed": [
+            {
+                "deployment_id": d.deployment_id,
+                "agent_id": d.agent_id,
+                "agent_name": d.agent_name,
+                "status": d.status,
+                "config": d.config,
+                "deployed_at": d.deployed_at.isoformat() if d.deployed_at else None,
+            }
+            for d in deployments
+        ],
+    }
+
+
+@app.delete("/marketplace/deploy/{deployment_id}")
+async def undeploy_agent_endpoint(deployment_id: str, user=Depends(get_current_user)):
+    """Remove a deployed agent."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(MarketplaceDeployedAgent).where(
+                MarketplaceDeployedAgent.deployment_id == deployment_id,
+                MarketplaceDeployedAgent.user_id == user["sub"],
+            )
+        )
+        deployment = result.scalar_one_or_none()
+        if not deployment:
+            raise HTTPException(status_code=404, detail="Deployment not found")
+        deployment.status = "removed"
+        await session.commit()
+
+    return {"status": "removed", "deployment_id": deployment_id}
+
+
+# ===========================================================================
+# Observatory — Real Execution Traces
+# ===========================================================================
+
+@app.get("/observatory/traces")
+async def list_traces(
+    status: Optional[str] = None,
+    limit: int = 50,
+    user=Depends(get_current_user),
+):
+    """List execution traces for the observatory."""
+    user_id = user["sub"]
+    async with async_session() as session:
+        query = (
+            select(ExecutionTrace)
+            .where(ExecutionTrace.user_id == user_id)
+            .order_by(ExecutionTrace.started_at.desc())
+            .limit(min(limit, 100))
+        )
+        if status:
+            query = query.where(ExecutionTrace.status == status)
+        result = await session.execute(query)
+        traces = result.scalars().all()
+
+    return {
+        "traces": [
+            {
+                "trace_id": t.trace_id,
+                "task_id": t.task_id,
+                "status": t.status,
+                "nodes": t.nodes,
+                "total_duration": t.total_duration,
+                "started_at": t.started_at.isoformat() if t.started_at else None,
+                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+            }
+            for t in traces
+        ],
+        "count": len(traces),
+    }
+
+
+@app.get("/observatory/traces/{trace_id}")
+async def get_trace(trace_id: str, user=Depends(get_current_user)):
+    """Get a single execution trace with full node details."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(ExecutionTrace).where(ExecutionTrace.trace_id == trace_id)
+        )
+        trace = result.scalar_one_or_none()
+
+    if not trace:
+        raise HTTPException(status_code=404, detail="Trace not found")
+    if trace.user_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return {
+        "trace": {
+            "trace_id": trace.trace_id,
+            "task_id": trace.task_id,
+            "status": trace.status,
+            "nodes": trace.nodes,
+            "total_duration": trace.total_duration,
+            "started_at": trace.started_at.isoformat() if trace.started_at else None,
+            "completed_at": trace.completed_at.isoformat() if trace.completed_at else None,
+        },
+    }
+
+
+@app.get("/observatory/stats")
+async def observatory_stats(user=Depends(get_current_user)):
+    """Get aggregated observatory statistics."""
+    user_id = user["sub"]
+    async with async_session() as session:
+        result = await session.execute(
+            select(ExecutionTrace).where(ExecutionTrace.user_id == user_id)
+        )
+        traces = result.scalars().all()
+
+    total = len(traces)
+    completed = sum(1 for t in traces if t.status == "completed")
+    failed = sum(1 for t in traces if t.status == "failed")
+    avg_duration = 0.0
+    if completed:
+        durations = [t.total_duration for t in traces if t.total_duration and t.status == "completed"]
+        avg_duration = round(sum(durations) / len(durations), 2) if durations else 0.0
+
+    return {
+        "stats": {
+            "total_traces": total,
+            "completed": completed,
+            "failed": failed,
+            "running": total - completed - failed,
+            "success_rate": round(completed / total * 100, 1) if total else 0,
+            "avg_duration": avg_duration,
+        },
+    }
+
+
+# ===========================================================================
 # Phase 8: WebSocket Endpoint
 # ===========================================================================
 
@@ -973,3 +1306,201 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         ws_manager.disconnect(websocket, user_id)
     except Exception:
         ws_manager.disconnect(websocket, user_id)
+
+
+# ===========================================================================
+# Phase 10: Deployable Agent Marketplace API
+# ===========================================================================
+
+class DeployAgentCreateRequest(BaseModel):
+    name: str
+    description: str = ""
+    agent_type: str = "llm"  # llm | ml | hybrid
+    visibility: str = "public"  # public | private
+    capabilities: List[str] = []
+    ml_models: List[str] = []
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    system_prompt: Optional[str] = None
+    tools: List[str] = []
+    config: Dict[str, Any] = {}
+    tags: List[str] = []
+    icon: Optional[str] = None
+    category: Optional[str] = None
+    workflow_id: Optional[str] = None
+
+
+class DeployAgentUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    agent_type: Optional[str] = None
+    visibility: Optional[str] = None
+    capabilities: Optional[List[str]] = None
+    ml_models: Optional[List[str]] = None
+    system_prompt: Optional[str] = None
+    tools: Optional[List[str]] = None
+    config: Optional[Dict[str, Any]] = None
+    tags: Optional[List[str]] = None
+    icon: Optional[str] = None
+    category: Optional[str] = None
+    status: Optional[str] = None
+    workflow_id: Optional[str] = None
+
+
+class AgentExecuteRequest(BaseModel):
+    input: str
+
+
+@app.post("/platform/agents")
+async def create_deployable_agent(req: DeployAgentCreateRequest, user=Depends(get_current_user)):
+    """Deploy a new agent (public or private)."""
+    if not req.name.strip():
+        raise HTTPException(status_code=400, detail="Agent name is required")
+    result = await deploy_new_agent(
+        owner_id=user["sub"],
+        name=req.name,
+        description=req.description,
+        agent_type=req.agent_type,
+        visibility=req.visibility,
+        capabilities=req.capabilities,
+        ml_models=req.ml_models,
+        llm_provider=req.llm_provider,
+        llm_model=req.llm_model,
+        system_prompt=req.system_prompt,
+        tools=req.tools,
+        config=req.config,
+        tags=req.tags,
+        icon=req.icon,
+        category=req.category,
+        workflow_id=req.workflow_id,
+    )
+    return {"status": "deployed", "agent": result}
+
+
+@app.get("/platform/agents")
+async def list_deployable_agents(
+    category: Optional[str] = None,
+    agent_type: Optional[str] = None,
+    search: Optional[str] = None,
+    mine_only: bool = False,
+    limit: int = 50,
+    user=Depends(get_current_user),
+):
+    """List agents: public marketplace + user's own private agents."""
+    agents = await list_agents_for_user(
+        user_id=user["sub"],
+        include_public=not mine_only,
+        category=category,
+        agent_type=agent_type,
+        search=search,
+        limit=limit,
+    )
+    return {"agents": agents, "count": len(agents)}
+
+
+@app.get("/platform/agents/public")
+async def list_public_agents(
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 50,
+):
+    """List all public agents (no auth required for browsing)."""
+    agents = await list_agents_for_user(
+        user_id="__public__",
+        include_public=True,
+        category=category,
+        search=search,
+        limit=limit,
+    )
+    # Filter to only public
+    public = [a for a in agents if a["visibility"] == "public"]
+    return {"agents": public, "count": len(public)}
+
+
+@app.get("/platform/agents/{agent_id}")
+async def get_single_deployable_agent(agent_id: str):
+    """Get details of a single agent."""
+    agent = await get_deployable_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"agent": agent}
+
+
+@app.put("/platform/agents/{agent_id}")
+async def update_single_deployable_agent(
+    agent_id: str,
+    req: DeployAgentUpdateRequest,
+    user=Depends(get_current_user),
+):
+    """Update an agent (owner only)."""
+    updates = req.model_dump(exclude_none=True)
+    result = await update_deployable_agent(agent_id, user["sub"], **updates)
+    if not result:
+        raise HTTPException(status_code=404, detail="Agent not found or access denied")
+    return {"status": "updated", "agent": result}
+
+
+@app.delete("/platform/agents/{agent_id}")
+async def delete_single_deployable_agent(agent_id: str, user=Depends(get_current_user)):
+    """Delete an agent (owner only, soft delete)."""
+    deleted = await delete_deployable_agent(agent_id, user["sub"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Agent not found or access denied")
+    return {"status": "deleted"}
+
+
+@app.post("/platform/agents/{agent_id}/execute")
+async def execute_deployable_agent(
+    agent_id: str,
+    req: AgentExecuteRequest,
+    user=Depends(get_current_user),
+):
+    """Execute an agent with real ML + LLM tools. Returns full run results."""
+    if not req.input.strip():
+        raise HTTPException(status_code=400, detail="Input cannot be empty")
+    result = await execute_agent(
+        agent_id=agent_id,
+        user_id=user["sub"],
+        input_text=req.input.strip(),
+    )
+    if result.get("error") == "Agent not found":
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if result.get("error") and "Access denied" in result["error"]:
+        raise HTTPException(status_code=403, detail=result["error"])
+    return result
+
+
+@app.get("/platform/runs")
+async def list_user_agent_runs(
+    agent_id: Optional[str] = None,
+    limit: int = 20,
+    user=Depends(get_current_user),
+):
+    """List agent execution runs for the current user."""
+    runs = await list_agent_runs(user_id=user["sub"], agent_id=agent_id, limit=limit)
+    return {"runs": runs, "count": len(runs)}
+
+
+@app.get("/platform/runs/{run_id}")
+async def get_single_agent_run(run_id: str, user=Depends(get_current_user)):
+    """Get a single agent run with full details."""
+    run = await get_agent_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run["user_id"] != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return {"run": run}
+
+
+@app.get("/platform/ml-tools")
+async def list_ml_tools():
+    """List all available ML tools and their schemas."""
+    tools = [
+        {
+            "name": name,
+            "description": info["description"],
+            "input_schema": info["input_schema"],
+        }
+        for name, info in ML_TOOLS.items()
+    ]
+    return {"tools": tools, "count": len(tools)}

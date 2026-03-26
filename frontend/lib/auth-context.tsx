@@ -28,6 +28,12 @@ interface AuthContextValue extends AuthState {
   loginWithGoogle: () => void;
   loginWithGithub: () => void;
   loginWithCredentials: (userId: string, tenantId: string) => Promise<void>;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  signupWithEmail: (
+    email: string,
+    password: string,
+    name: string,
+  ) => Promise<void>;
   logout: () => Promise<void>;
   getToken: () => string | null;
 }
@@ -100,6 +106,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Clean URL
       window.history.replaceState({}, "", window.location.pathname);
     }
+  }, []);
+
+  // Handle unauthorized event from API client
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleUnauthorized = () => {
+      clearAuth();
+      setRefreshToken(null);
+      setState({
+        user: null,
+        accessToken: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+    };
+    window.addEventListener("orkestron:auth:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("orkestron:auth:unauthorized", handleUnauthorized);
   }, []);
 
   async function handleOAuthCallback(provider: string, code: string, state: string) {
@@ -186,11 +209,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const authData = {
           accessToken: data.access_token,
-          refreshToken: "",
+          refreshToken: data.refresh_token || "",
           user,
         };
 
         storeAuth(authData);
+        setRefreshToken(data.refresh_token || null);
         setState({
           user,
           accessToken: data.access_token,
@@ -203,6 +227,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     },
     []
+  );
+
+  const signupWithEmail = useCallback(
+    async (email: string, password: string, name: string) => {
+      try {
+        const res = await fetch(`${API_URL}/auth/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, name }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Signup failed");
+        }
+
+        const data = await res.json();
+        const user: User = data.user;
+
+        const authData = {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token || "",
+          user,
+        };
+
+        storeAuth(authData);
+        setRefreshToken(data.refresh_token || null);
+        setState({
+          user,
+          accessToken: data.access_token,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      } catch (err) {
+        console.error("Signup error:", err);
+        throw err;
+      }
+    },
+    [],
+  );
+
+  const loginWithEmail = useCallback(
+    async (email: string, password: string) => {
+      try {
+        const res = await fetch(`${API_URL}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Invalid email or password");
+        }
+
+        const data = await res.json();
+        const user: User = data.user;
+
+        const authData = {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token || "",
+          user,
+        };
+
+        storeAuth(authData);
+        setRefreshToken(data.refresh_token || null);
+        setState({
+          user,
+          accessToken: data.access_token,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      } catch (err) {
+        console.error("Email login error:", err);
+        throw err;
+      }
+    },
+    [],
   );
 
   const logout = useCallback(async () => {
@@ -236,6 +338,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithGoogle,
         loginWithGithub,
         loginWithCredentials,
+        loginWithEmail,
+        signupWithEmail,
         logout,
         getToken,
       }}

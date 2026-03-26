@@ -33,6 +33,8 @@ It must match `POSTGRES_PASSWORD` in your `.env` file.
 
 ### 3. Set Up Python Environment
 
+Use `backend/.venv` as the only supported Python environment for this project.
+
 ```bash
 cd backend
 
@@ -71,6 +73,9 @@ JWT_SECRET=your-secret-key
 ```bash
 cd backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# In another terminal (same virtualenv), run queue worker
+python -m app.jobs.worker
 ```
 
 The API will be at `http://localhost:8000`.  
@@ -87,7 +92,10 @@ Docs at `http://localhost:8000/docs`.
 - `GET /auth/me` — Current user info
 
 ### Tasks
-- `POST /task` — Submit orchestration task (requires JWT)
+- `POST /tasks/real` — Submit orchestration task to async queue (requires JWT)
+- `GET /tasks/{task_id}` — Poll status and result
+- `GET /tasks/real/{task_id}` — Backward-compatible poll endpoint
+- `GET /tasks/real/{task_id}/logs` — Agent execution logs
 
 ### Workflows
 - `POST /workflows` — Create workflow

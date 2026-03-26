@@ -99,6 +99,8 @@ docker compose up -d
 
 ### 4. Install Python dependencies
 
+Use a single Python environment for this repo: `backend/.venv`.
+
 ```bash
 cd backend
 python -m venv .venv
@@ -117,6 +119,9 @@ pip install -r requirements.txt
 ```bash
 cd backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# In another terminal (same virtualenv), run the queue worker
+python -m app.jobs.worker
 ```
 
 The API is now live at **http://localhost:8000**.
@@ -162,11 +167,15 @@ curl -X POST http://localhost:8000/auth/token \
 ### Task Orchestration
 
 ```bash
-# Submit a task
-curl -X POST http://localhost:8000/task \
+# Submit a task (async queue)
+curl -X POST http://localhost:8000/tasks/real \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"input": "buy 500 units of steel"}'
+
+# Poll task status/result
+curl -X GET http://localhost:8000/tasks/<task_id> \
+  -H "Authorization: Bearer <token>"
 ```
 
 ### Agent Marketplace
@@ -217,10 +226,16 @@ TOKEN=$(curl -s -X POST http://localhost:8000/auth/token \
   -d '{"user_id":"user-1","tenant_id":"tenant-acme"}' | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 
 # 2. Submit a purchase task
-curl -s -X POST http://localhost:8000/task \
+TASK=$(curl -s -X POST http://localhost:8000/tasks/real \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input":"buy 500 units of industrial steel"}' | python -m json.tool
+  -d '{"input":"buy 500 units of industrial steel"}')
+
+TASK_ID=$(echo "$TASK" | python -c "import sys,json;print(json.load(sys.stdin)['task_id'])")
+
+# 3. Poll async status
+curl -s -X GET "http://localhost:8000/tasks/$TASK_ID" \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
 ```
 
 Or run the demo script:

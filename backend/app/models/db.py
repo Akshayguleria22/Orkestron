@@ -349,6 +349,264 @@ class Product(Base):
 
 
 # ---------------------------------------------------------------------------
+# Phase 9 — Real AI Task Execution Platform
+# ---------------------------------------------------------------------------
+
+class Task(Base):
+    """
+    User-submitted task — the core entity of the AI execution platform.
+    Each task is decomposed by the planner and executed by agents.
+    """
+
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_id = Column(String(128), nullable=False, unique=True, index=True)
+    user_id = Column(String(256), nullable=False, index=True)
+    input_text = Column(Text, nullable=False)
+    task_type = Column(String(64), nullable=True)  # search | analysis | comparison | research | execution
+    status = Column(String(32), nullable=False, default="pending")  # pending | queued | planning | running | completed | failed
+    plan = Column(JSON, nullable=True)  # planner output: list of steps
+    result = Column(JSON, nullable=True)  # structured final result
+    result_text = Column(Text, nullable=True)  # human-readable summary
+    agent_path = Column(JSON, nullable=False, default=list)  # agents that ran
+    total_duration = Column(Float, nullable=True)
+    error_message = Column(Text, nullable=True)
+    task_metadata = Column(JSON, nullable=False, default=dict)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class AgentExecutionLog(Base):
+    """
+    Per-agent execution log — records input, output, latency, and tool usage
+    for every agent invocation within a task.
+    """
+
+    __tablename__ = "agent_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    log_id = Column(String(128), nullable=False, unique=True, index=True)
+    task_id = Column(String(128), nullable=False, index=True)
+    agent_name = Column(String(128), nullable=False, index=True)
+    agent_type = Column(String(64), nullable=False)  # planner | search | extraction | reasoning | comparison | result
+    step_index = Column(Integer, nullable=False, default=0)
+    input_data = Column(JSON, nullable=False, default=dict)
+    output_data = Column(JSON, nullable=True)
+    status = Column(String(32), nullable=False, default="pending")  # pending | running | completed | error
+    latency_ms = Column(Float, nullable=True)
+    tools_used = Column(JSON, nullable=False, default=list)  # list of tool names invoked
+    error_message = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class ToolCallLog(Base):
+    """
+    Records every external tool invocation — web search, scrape, API call, etc.
+    Linked to the agent_log that triggered it.
+    """
+
+    __tablename__ = "tool_calls"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    call_id = Column(String(128), nullable=False, unique=True, index=True)
+    task_id = Column(String(128), nullable=False, index=True)
+    agent_log_id = Column(String(128), nullable=False, index=True)
+    tool_name = Column(String(128), nullable=False)  # web_search | web_scrape | api_call | email | db_query | vector_search
+    input_params = Column(JSON, nullable=False, default=dict)
+    output_data = Column(JSON, nullable=True)
+    status = Column(String(32), nullable=False, default="pending")  # pending | success | error
+    latency_ms = Column(Float, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Refresh Tokens — DB-backed (replaces in-memory storage)
+# ---------------------------------------------------------------------------
+
+class RefreshToken(Base):
+    """
+    Stores hashed refresh tokens in the database.
+    Supports token rotation and reuse detection.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    user_id = Column(String(256), nullable=False, index=True)
+    revoked = Column(Boolean, nullable=False, default=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Marketplace Deployed Agents — user-deployable agents from marketplace
+# ---------------------------------------------------------------------------
+
+class MarketplaceDeployedAgent(Base):
+    """
+    Tracks agents deployed by a user from the marketplace.
+    """
+
+    __tablename__ = "marketplace_deployed_agents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    deployment_id = Column(String(128), nullable=False, unique=True, index=True)
+    user_id = Column(String(256), nullable=False, index=True)
+    agent_id = Column(String(128), nullable=False, index=True)
+    agent_name = Column(String(256), nullable=False)
+    status = Column(String(32), nullable=False, default="active")  # active | paused | removed
+    config = Column(JSON, nullable=False, default=dict)
+    deployed_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 — Deployable Agent Marketplace (Real Agent Platform)
+# ---------------------------------------------------------------------------
+
+class DeployableAgent(Base):
+    """
+    A user-deployed AI agent that can be public or private.
+    Supports LLM, ML, and hybrid agent types.
+    Anyone can deploy; public agents are available to all users.
+    """
+
+    __tablename__ = "deployable_agents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_id = Column(String(128), nullable=False, unique=True, index=True)
+    owner_id = Column(String(256), nullable=False, index=True)  # user who deployed
+    name = Column(String(256), nullable=False)
+    description = Column(Text, nullable=False, default="")
+    agent_type = Column(String(32), nullable=False, default="llm")  # llm | ml | hybrid
+    visibility = Column(String(16), nullable=False, default="public")  # public | private
+    status = Column(String(32), nullable=False, default="active")  # active | paused | error | removed
+
+    # Capabilities this agent exposes
+    capabilities = Column(ARRAY(String), nullable=False, default=list)
+    # ML models this agent uses (e.g. ["sentiment", "ner", "similarity"])
+    ml_models = Column(ARRAY(String), nullable=False, default=list)
+    # LLM config
+    llm_provider = Column(String(64), nullable=True)  # groq | openai | local
+    llm_model = Column(String(128), nullable=True)  # e.g. openai/gpt-oss-120b
+    # System prompt for LLM-based agents
+    system_prompt = Column(Text, nullable=True)
+    # Tools this agent can use
+    tools = Column(ARRAY(String), nullable=False, default=list)  # web_search | scraper | ml_classify | ...
+    # Runtime config
+    config = Column(JSON, nullable=False, default=dict)  # temperature, max_tokens, etc.
+    # Associated workflow (optional)
+    workflow_id = Column(String(128), nullable=True, index=True)
+
+    # Usage stats (updated after each execution)
+    total_runs = Column(Integer, nullable=False, default=0)
+    successful_runs = Column(Integer, nullable=False, default=0)
+    failed_runs = Column(Integer, nullable=False, default=0)
+    avg_latency_ms = Column(Float, nullable=False, default=0.0)
+    total_tokens_used = Column(Integer, nullable=False, default=0)
+
+    # Metadata
+    tags = Column(ARRAY(String), nullable=False, default=list)
+    icon = Column(String(64), nullable=True)  # emoji or icon name
+    category = Column(String(64), nullable=True)  # research | analysis | coding | creative | ...
+
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class AgentRun(Base):
+    """
+    Records every execution of a deployable agent.
+    Tracks input, output, tools used, latency, and token usage.
+    """
+
+    __tablename__ = "agent_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(128), nullable=False, unique=True, index=True)
+    agent_id = Column(String(128), nullable=False, index=True)
+    user_id = Column(String(256), nullable=False, index=True)  # user who triggered
+    task_id = Column(String(128), nullable=True, index=True)  # linked task (optional)
+
+    input_text = Column(Text, nullable=False)
+    status = Column(String(32), nullable=False, default="pending")  # pending | running | completed | failed
+    result = Column(JSON, nullable=True)
+    result_text = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    # Execution details
+    steps = Column(JSON, nullable=False, default=list)  # [{tool, input, output, duration, status}]
+    tools_used = Column(ARRAY(String), nullable=False, default=list)
+    ml_models_used = Column(ARRAY(String), nullable=False, default=list)
+    tokens_used = Column(Integer, nullable=False, default=0)
+    total_duration = Column(Float, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Execution Trace — real traces for observatory (replaces mock workflow data)
+# ---------------------------------------------------------------------------
+
+class ExecutionTrace(Base):
+    """
+    Records full execution traces for the observatory.
+    Each trace represents one task's full agent execution pipeline.
+    """
+
+    __tablename__ = "execution_traces"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trace_id = Column(String(128), nullable=False, unique=True, index=True)
+    task_id = Column(String(128), nullable=False, index=True)
+    user_id = Column(String(256), nullable=False, index=True)
+    status = Column(String(32), nullable=False, default="running")  # running | completed | failed
+    nodes = Column(JSON, nullable=False, default=list)  # [{agent, status, duration, input, output}]
+    total_duration = Column(Float, nullable=True)
+    started_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+# ---------------------------------------------------------------------------
 # DB initialization — must be after ALL models so metadata includes everything
 # ---------------------------------------------------------------------------
 
