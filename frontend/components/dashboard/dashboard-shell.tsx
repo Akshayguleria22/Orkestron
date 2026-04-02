@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -21,6 +22,7 @@ import {
 import { StatusBar } from "./status-bar";
 import { CommandCenter } from "@/components/command-center/command-center";
 import { useAuth } from "@/lib/auth-context";
+import logoImage from "@/lib/logo.png";
 
 type NavSection = {
   title?: string;
@@ -73,15 +75,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       {/* ─── Sidebar ─── */}
       <aside
         className={cn(
-          "flex flex-col border-r border-white/[0.06] bg-[#0d1117] shrink-0 transition-[width] duration-200 ease-in-out",
+          "flex flex-col border-r border-white/[0.06] bg-black/40 backdrop-blur-xl shrink-0 transition-[width] duration-200 ease-in-out relative z-10",
           collapsed ? "w-16" : "w-[220px]",
         )}
       >
         {/* Logo */}
         <div className="h-14 flex items-center px-4 border-b border-white/[0.06]">
           <Link href="/" className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
-              <Brain className="w-3.5 h-3.5 text-violet-400" />
+            <div className="relative w-7 h-7 rounded-lg border border-violet-500/20 bg-white/[0.02] overflow-hidden shrink-0">
+              <Image
+                src={logoImage}
+                alt="Orkestron logo"
+                fill
+                className="object-contain p-1"
+                priority
+              />
             </div>
             {!collapsed && (
               <span className="text-sm font-semibold tracking-tight whitespace-nowrap font-display">
@@ -191,9 +199,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* ─── Main Content ─── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-violet-600/[0.03] rounded-full blur-[150px] pointer-events-none" />
         <StatusBar />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto z-10 relative custom-scrollbar">
           <div className="p-6 animate-fade-in">{children}</div>
         </main>
         <CommandCenter onLaunchSimulation={handleLaunchSimulation} />

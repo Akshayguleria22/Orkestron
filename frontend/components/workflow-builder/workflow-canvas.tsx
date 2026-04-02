@@ -3,6 +3,7 @@
 import {
   useCallback,
   useRef,
+  useMemo,
   type DragEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -28,8 +29,6 @@ import { BuilderNode, type BuilderNodeData } from "./builder-node";
 import { AnimatedEdge, type AnimatedEdgeData } from "./animated-edge";
 import type { NodeTemplate } from "./node-sidebar";
 
-const nodeTypes = { builderNode: BuilderNode };
-const edgeTypes = { animatedEdge: AnimatedEdge };
 
 interface WorkflowCanvasProps {
   nodes: Node[];
@@ -61,6 +60,9 @@ export function WorkflowCanvas({
 }: WorkflowCanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
+
+  const nodeTypes = useMemo(() => ({ builderNode: BuilderNode }), []);
+  const edgeTypes = useMemo(() => ({ animatedEdge: AnimatedEdge }), []);
 
   const onConnect = useCallback(
     (params: Connection) => {

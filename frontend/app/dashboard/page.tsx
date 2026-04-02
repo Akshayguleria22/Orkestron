@@ -194,10 +194,32 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-6 h-6 text-violet-400 animate-spin" />
-          <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+      <div className="space-y-6 max-w-[1400px] animate-pulse">
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-6 w-48 bg-white/[0.05] rounded-lg" />
+            <div className="h-4 w-64 bg-white/[0.03] rounded mt-2" />
+          </div>
+          <div className="h-10 w-56 bg-white/[0.03] rounded-lg" />
+        </div>
+        {/* KPI cards skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-white/[0.04]" />
+                <div className="h-4 w-20 bg-white/[0.04] rounded" />
+              </div>
+              <div className="h-7 w-16 bg-white/[0.06] rounded" />
+              <div className="h-3 w-24 bg-white/[0.03] rounded" />
+            </div>
+          ))}
+        </div>
+        {/* Charts skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 h-[300px] rounded-xl border border-white/[0.06] bg-white/[0.02]" />
+          <div className="h-[300px] rounded-xl border border-white/[0.06] bg-white/[0.02]" />
         </div>
       </div>
     );

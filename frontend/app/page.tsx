@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform, useInView } from "framer-motion";
 import {
@@ -25,6 +26,7 @@ import {
   Clock,
 } from "lucide-react";
 import { GridBackground } from "@/components/landing/grid-background";
+import logoImage from "@/lib/logo.png";
 
 const pipelineSteps = [
   { name: "Plan", desc: "LLM decomposes your task", icon: Brain, color: "from-violet-500/20 to-violet-500/5", border: "border-violet-500/30", text: "text-violet-400", delay: 0 },
@@ -98,19 +100,48 @@ export default function LandingPage() {
       <nav className="fixed top-0 inset-x-0 z-50 border-b border-white/[0.04] bg-background/60 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500/20 to-cyan-500/10 border border-violet-500/20 flex items-center justify-center">
-              <Brain className="w-3.5 h-3.5 text-violet-400" />
+            <div className="relative w-7 h-7 rounded-lg border border-violet-500/20 bg-white/[0.02] overflow-hidden">
+              <Image
+                src={logoImage}
+                alt="Orkestron logo"
+                fill
+                className="object-contain p-1"
+                priority
+              />
             </div>
-            <span className="text-sm font-display font-bold tracking-tight">ORKESTRON</span>
+            <span className="text-sm font-display font-bold tracking-tight">
+              ORKESTRON
+            </span>
           </div>
           <div className="hidden md:flex items-center gap-6 text-[13px] text-muted-foreground">
-            <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-            <a href="#how-it-works" className="hover:text-foreground transition-colors">How It Works</a>
-            <a href="#stats" className="hover:text-foreground transition-colors">Stats</a>
-            <Link href="/dashboard" className="px-4 py-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-sm transition-colors">
+            <a
+              href="#features"
+              className="hover:text-foreground transition-colors"
+            >
+              Features
+            </a>
+            <a
+              href="#how-it-works"
+              className="hover:text-foreground transition-colors"
+            >
+              How It Works
+            </a>
+            <a
+              href="#stats"
+              className="hover:text-foreground transition-colors"
+            >
+              Stats
+            </a>
+            <Link
+              href="/dashboard"
+              className="px-4 py-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-sm transition-colors"
+            >
               Dashboard
             </Link>
-            <Link href="/login" className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-white text-sm font-medium transition-all shadow-lg shadow-violet-600/20">
+            <Link
+              href="/login"
+              className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-white text-sm font-medium transition-all shadow-lg shadow-violet-600/20"
+            >
               Get Started
             </Link>
           </div>
@@ -138,12 +169,12 @@ export default function LandingPage() {
 
           {/* Main Title */}
           <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.1 }}
-            className="text-7xl md:text-[7rem] font-display font-bold tracking-tighter leading-[0.9] mb-6"
+            initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+            transition={{ duration: 1, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+            className="text-6xl md:text-[8rem] font-display font-extrabold tracking-tighter leading-[0.9] mb-8"
           >
-            <span className="text-gradient">ORKESTRON</span>
+            <span className="text-gradient drop-shadow-2xl">ORKESTRON</span>
           </motion.h1>
 
           {/* Subtitle with wavy underline */}
@@ -167,9 +198,9 @@ export default function LandingPage() {
             transition={{ duration: 0.7, delay: 0.35 }}
             className="text-base text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed"
           >
-            Submit any task in natural language. Orkestron decomposes it, dispatches
-            real AI agents with web search, analysis, and reasoning — then delivers
-            structured results.
+            Submit any task in natural language. Orkestron decomposes it,
+            dispatches real AI agents with web search, analysis, and reasoning —
+            then delivers structured results.
           </motion.p>
 
           {/* Example task pills */}
@@ -231,7 +262,9 @@ export default function LandingPage() {
                 >
                   <step.icon className={`w-6 h-6 ${step.text} mx-auto mb-2`} />
                   <h4 className="text-sm font-semibold mb-0.5">{step.name}</h4>
-                  <p className="text-[11px] text-muted-foreground">{step.desc}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {step.desc}
+                  </p>
                   {/* Connection arrow */}
                   {i < pipelineSteps.length - 1 && (
                     <div className="hidden md:block absolute -right-2 top-1/2 -translate-y-1/2 z-10">
@@ -249,21 +282,30 @@ export default function LandingPage() {
         </div>
 
         {/* Hero glow effects */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-indigo-500/[0.04] rounded-full blur-[150px] pointer-events-none" />
-        <div className="absolute top-1/4 left-1/3 w-[400px] h-[400px] bg-violet-500/[0.03] rounded-full blur-[120px] pointer-events-none animate-float-slow" />
-        <div className="absolute top-1/2 right-1/4 w-[300px] h-[300px] bg-cyan-500/[0.025] rounded-full blur-[100px] pointer-events-none animate-float-medium" />
+        <div className="absolute top-[20%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[600px] bg-violet-600/[0.08] rounded-full blur-[180px] pointer-events-none" />
+        <div className="absolute top-[40%] left-[20%] w-[500px] h-[500px] bg-cyan-500/[0.06] rounded-full blur-[150px] pointer-events-none animate-float-slow" />
+        <div className="absolute top-[50%] right-[15%] w-[450px] h-[450px] bg-fuchsia-600/[0.05] rounded-full blur-[150px] pointer-events-none animate-float-medium" />
       </motion.section>
 
       {/* ─── Stats Bar ─── */}
-      <section id="stats" className="relative py-12 px-6 border-y border-white/[0.04] bg-white/[0.01]">
+      <section
+        id="stats"
+        className="relative py-12 px-6 border-y border-white/[0.04] bg-white/[0.01]"
+      >
         <div className="max-w-4xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {stats.map((stat, i) => (
-              <ScrollSection key={stat.label} delay={i * 0.1} className="text-center">
+              <ScrollSection
+                key={stat.label}
+                delay={i * 0.1}
+                className="text-center"
+              >
                 <p className="text-3xl md:text-4xl font-display font-bold text-gradient mb-1">
                   <AnimatedCounter value={stat.value} />
                 </p>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                  {stat.label}
+                </p>
               </ScrollSection>
             ))}
           </div>
@@ -278,10 +320,12 @@ export default function LandingPage() {
               Capabilities
             </p>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
-              Real AI agents that <span className="text-gradient">actually work</span>
+              Real AI agents that{" "}
+              <span className="text-gradient">actually work</span>
             </h2>
             <p className="text-muted-foreground max-w-lg mx-auto">
-              Not another wrapper. Orkestron is a full agent orchestration engine that plans, executes, and delivers.
+              Not another wrapper. Orkestron is a full agent orchestration
+              engine that plans, executes, and delivers.
             </p>
           </ScrollSection>
 
@@ -293,8 +337,12 @@ export default function LandingPage() {
                   <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mb-4 group-hover:border-violet-500/20 transition-colors">
                     <feature.icon className="w-5 h-5 text-muted-foreground group-hover:text-violet-400 transition-colors" />
                   </div>
-                  <h3 className="text-sm font-semibold text-foreground mb-2">{feature.title}</h3>
-                  <p className="text-[13px] text-muted-foreground leading-relaxed">{feature.description}</p>
+                  <h3 className="text-sm font-semibold text-foreground mb-2">
+                    {feature.title}
+                  </h3>
+                  <p className="text-[13px] text-muted-foreground leading-relaxed">
+                    {feature.description}
+                  </p>
                 </div>
               </ScrollSection>
             ))}
@@ -310,24 +358,30 @@ export default function LandingPage() {
               How It Works
             </p>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
-              From task to result in <span className="text-gradient">seconds</span>
+              From task to result in{" "}
+              <span className="text-gradient">seconds</span>
             </h2>
             <p className="text-muted-foreground max-w-lg mx-auto">
-              Describe what you need. Orkestron plans, dispatches agents, and delivers structured results — fully automated.
+              Describe what you need. Orkestron plans, dispatches agents, and
+              delivers structured results — fully automated.
             </p>
           </ScrollSection>
 
           <ScrollSection delay={0.2}>
-            <div className="rounded-2xl border border-white/[0.06] bg-[#111827]/50 p-8 md:p-12 relative overflow-hidden">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#030303]/60 backdrop-blur-2xl p-8 md:p-12 relative overflow-hidden shadow-2xl">
               {/* Animated border glow */}
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-violet-500/10 via-transparent to-cyan-500/10 animate-flow-border pointer-events-none" />
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-violet-500/20 via-cyan-500/10 to-fuchsia-500/20 animate-flow-border pointer-events-none" />
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
                 {[
                   {
                     step: "01",
                     title: "Plan",
-                    items: ["LLM decomposes your task", "Identifies required agents", "Generates search queries & strategy"],
+                    items: [
+                      "LLM decomposes your task",
+                      "Identifies required agents",
+                      "Generates search queries & strategy",
+                    ],
                     color: "border-violet-500/20",
                     icon: Brain,
                     iconColor: "text-violet-400",
@@ -335,7 +389,11 @@ export default function LandingPage() {
                   {
                     step: "02",
                     title: "Execute",
-                    items: ["Web search & data scraping", "Analysis, reasoning & comparison", "Multi-agent coordination"],
+                    items: [
+                      "Web search & data scraping",
+                      "Analysis, reasoning & comparison",
+                      "Multi-agent coordination",
+                    ],
                     color: "border-cyan-500/20",
                     icon: Zap,
                     iconColor: "text-cyan-400",
@@ -343,26 +401,41 @@ export default function LandingPage() {
                   {
                     step: "03",
                     title: "Deliver",
-                    items: ["Structured results with sources", "Recommendations & insights", "Full execution logs & traces"],
+                    items: [
+                      "Structured results with sources",
+                      "Recommendations & insights",
+                      "Full execution logs & traces",
+                    ],
                     color: "border-emerald-500/20",
                     icon: CheckCircle2,
                     iconColor: "text-emerald-400",
                   },
                 ].map((block, i) => (
                   <ScrollSection key={block.title} delay={0.3 + i * 0.15}>
-                    <div className={`rounded-xl border ${block.color} bg-white/[0.02] p-6 h-full`}>
+                    <div
+                      className={`rounded-xl border ${block.color} bg-white/[0.02] p-6 h-full`}
+                    >
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-8 h-8 rounded-lg bg-white/[0.04] flex items-center justify-center">
-                          <block.icon className={`w-4 h-4 ${block.iconColor}`} />
+                          <block.icon
+                            className={`w-4 h-4 ${block.iconColor}`}
+                          />
                         </div>
                         <div>
-                          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Step {block.step}</span>
-                          <h4 className="text-sm font-semibold">{block.title}</h4>
+                          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                            Step {block.step}
+                          </span>
+                          <h4 className="text-sm font-semibold">
+                            {block.title}
+                          </h4>
                         </div>
                       </div>
                       <ul className="space-y-2.5">
                         {block.items.map((item) => (
-                          <li key={item} className="flex items-start gap-2 text-[13px] text-muted-foreground">
+                          <li
+                            key={item}
+                            className="flex items-start gap-2 text-[13px] text-muted-foreground"
+                          >
                             <div className="w-1.5 h-1.5 rounded-full bg-violet-500/60 mt-1.5 shrink-0" />
                             {item}
                           </li>
@@ -381,7 +454,10 @@ export default function LandingPage() {
                   { name: "Web Scraping", icon: Globe },
                   { name: "Structured Output", icon: Code },
                 ].map((tech) => (
-                  <div key={tech.name} className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-white/[0.04] bg-white/[0.01] text-[11px] text-muted-foreground hover:border-violet-500/15 transition-colors">
+                  <div
+                    key={tech.name}
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-white/[0.04] bg-white/[0.01] text-[11px] text-muted-foreground hover:border-violet-500/15 transition-colors"
+                  >
                     <tech.icon className="w-3.5 h-3.5" />
                     {tech.name}
                   </div>
@@ -400,21 +476,36 @@ export default function LandingPage() {
               Under the Hood
             </p>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-              Production-grade <span className="text-gradient">infrastructure</span>
+              Production-grade{" "}
+              <span className="text-gradient">infrastructure</span>
             </h2>
           </ScrollSection>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { icon: Shield, title: "Secure by Default", desc: "JWT auth, bcrypt passwords, SSRF protection on all outbound requests." },
-              { icon: Cpu, title: "Real-Time Tracking", desc: "WebSocket updates, agent execution logs, and full task audit trails." },
-              { icon: BarChart3, title: "Full Observability", desc: "Execution traces, dashboard analytics, and semantic caching built in." },
+              {
+                icon: Shield,
+                title: "Secure by Default",
+                desc: "JWT auth, bcrypt passwords, SSRF protection on all outbound requests.",
+              },
+              {
+                icon: Cpu,
+                title: "Real-Time Tracking",
+                desc: "WebSocket updates, agent execution logs, and full task audit trails.",
+              },
+              {
+                icon: BarChart3,
+                title: "Full Observability",
+                desc: "Execution traces, dashboard analytics, and semantic caching built in.",
+              },
             ].map((item, i) => (
               <ScrollSection key={item.title} delay={i * 0.1}>
                 <div className="rounded-xl border border-white/[0.06] bg-white/[0.015] p-6 hover:bg-white/[0.03] hover:border-white/[0.1] transition-all duration-300 h-full">
                   <item.icon className="w-5 h-5 text-violet-400 mb-4" />
                   <h4 className="text-sm font-semibold mb-2">{item.title}</h4>
-                  <p className="text-[13px] text-muted-foreground leading-relaxed">{item.desc}</p>
+                  <p className="text-[13px] text-muted-foreground leading-relaxed">
+                    {item.desc}
+                  </p>
                 </div>
               </ScrollSection>
             ))}
@@ -430,11 +521,12 @@ export default function LandingPage() {
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-violet-500/[0.06] rounded-full blur-[120px] pointer-events-none" />
 
             <h2 className="relative text-4xl md:text-5xl font-bold tracking-tight mb-4">
-              Ready to let AI <span className="text-gradient">do the work?</span>
+              Ready to let AI{" "}
+              <span className="text-gradient">do the work?</span>
             </h2>
             <p className="relative text-muted-foreground mb-10 max-w-md mx-auto">
-              Sign up in seconds. Submit your first task. Get real results powered
-              by real agents.
+              Sign up in seconds. Submit your first task. Get real results
+              powered by real agents.
             </p>
             <div className="relative flex items-center justify-center gap-4">
               <Link
@@ -460,8 +552,13 @@ export default function LandingPage() {
       <footer className="border-t border-white/[0.04] py-8 px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-2.5">
-            <div className="w-5 h-5 rounded-md bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-              <Brain className="w-3 h-3 text-violet-400" />
+            <div className="relative w-5 h-5 rounded-md border border-violet-500/20 bg-white/[0.02] overflow-hidden">
+              <Image
+                src={logoImage}
+                alt="Orkestron logo"
+                fill
+                className="object-contain p-1"
+              />
             </div>
             <span className="font-display font-semibold">ORKESTRON</span>
             <span>v1.0</span>

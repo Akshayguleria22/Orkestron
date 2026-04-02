@@ -7,9 +7,12 @@ Production mode: authenticate → submit task → dynamic AI agent execution
 """
 
 import asyncio
+import logging
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
+
+log = logging.getLogger(__name__)
 
 from fastapi import Depends, FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -168,7 +171,13 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------
-# CORS — allow frontend origins
+# Rate limiting middleware
+# ---------------------------------------------------------------------------
+app.add_middleware(RateLimitMiddleware)
+
+
+# ---------------------------------------------------------------------------
+# CORS — allow frontend origins (Must be added LAST to execute FIRST)
 # ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
@@ -177,11 +186,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ---------------------------------------------------------------------------
-# Rate limiting middleware
-# ---------------------------------------------------------------------------
-app.add_middleware(RateLimitMiddleware)
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +366,8 @@ async def login_endpoint(req: LoginRequest):
 @app.post("/tasks/real")
 async def submit_real_task(req: RealTaskRequest, user=Depends(get_current_user)):
     """Submit a natural language task that gets processed by real AI agents."""
+    from app.agents.dynamic_orchestrator import execute_real_task
+
     user_id = user["sub"]
 
     if not req.input or not req.input.strip():
@@ -384,17 +390,32 @@ async def submit_real_task(req: RealTaskRequest, user=Depends(get_current_user))
         log.error("Failed to create task: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to create task")
 
+    job_id = None
+    queued_via_rq = False
+
+    # Try Redis queue first, fall back to inline async execution
     try:
         job_id = enqueue_real_task_job(task_id=task_id, user_id=user_id, task_input=req.input.strip())
         await _update_task_status(task_id=task_id, status="queued")
+        queued_via_rq = True
     except Exception as exc:
-        log.error("Failed to enqueue task %s: %s", task_id, exc)
-        await _update_task_failure(task_id=task_id, error_message="Queue submission failed")
-        raise HTTPException(status_code=500, detail="Failed to enqueue task")
+        log.warning("RQ enqueue failed for task %s (%s), running inline", task_id, str(exc))
+        # Fall back: execute the task inline as an async background coroutine
+        await _update_task_status(task_id=task_id, status="queued")
+
+        async def _inline_execute():
+            try:
+                await _update_task_status(task_id=task_id, status="running")
+                await execute_real_task(task_id=task_id, user_id=user_id, task_input=req.input.strip())
+            except Exception as inner_exc:
+                log.exception("Inline task execution failed for %s: %s", task_id, str(inner_exc))
+                await _update_task_failure(task_id=task_id, error_message=str(inner_exc)[:500])
+
+        asyncio.create_task(_inline_execute())
 
     return {
         "task_id": task_id,
-        "job_id": job_id,
+        "job_id": job_id or f"inline-{task_id}",
         "status": "queued",
         "message": "Task queued. Poll GET /tasks/{task_id} or GET /tasks/real/{task_id} for status",
     }
@@ -426,22 +447,6 @@ async def _update_task_status(task_id: str, status: str, error_message: Optional
 @app.get("/tasks/real/{task_id}")
 async def get_real_task(task_id: str, user=Depends(get_current_user)):
     """Get the status and result of a submitted task."""
-    task = await _get_task_by_task_id(task_id)
-
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if task.user_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    return _serialize_real_task(task)
-
-
-# ---------------------------------------------------------------------------
-# GET /tasks/{task_id} — polling endpoint for queued task status/results
-# ---------------------------------------------------------------------------
-@app.get("/tasks/{task_id}")
-async def get_task(task_id: str, user=Depends(get_current_user)):
-    """Poll task status/result for asynchronous real-task execution."""
     task = await _get_task_by_task_id(task_id)
 
     if not task:
@@ -486,6 +491,22 @@ async def list_real_tasks(
         ],
         "count": len(tasks),
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /tasks/{task_id} — polling endpoint for queued task status/results
+# ---------------------------------------------------------------------------
+@app.get("/tasks/{task_id}")
+async def get_task(task_id: str, user=Depends(get_current_user)):
+    """Poll task status/result for asynchronous real-task execution."""
+    task = await _get_task_by_task_id(task_id)
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.user_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return _serialize_real_task(task)
 
 
 # ---------------------------------------------------------------------------
@@ -667,6 +688,37 @@ async def get_invoice_detail_endpoint(invoice_id: str, user=Depends(get_current_
     if invoice["user_id"] != user["sub"]:
         raise HTTPException(status_code=403, detail="Cannot view other user's invoice")
     return {"invoice": invoice}
+
+
+# ---------------------------------------------------------------------------
+# GET /billing/summary — aggregated billing summary for current user
+# ---------------------------------------------------------------------------
+@app.get("/billing/summary")
+async def billing_summary_endpoint(user=Depends(get_current_user)):
+    """Get billing summary with total fees, credits, and usage breakdown."""
+    user_id = user["sub"]
+    ledger = await get_user_ledger(user_id)
+
+    total_fees = sum(e.get("fee", 0) for e in ledger)
+    total_entries = len(ledger)
+    starting_credits = 10.00  # Default starting credits
+    credits_remaining = max(starting_credits - total_fees, 0)
+
+    # Group by pricing model
+    by_model: Dict[str, float] = {}
+    for entry in ledger:
+        model = entry.get("pricing_model", "unknown")
+        by_model[model] = by_model.get(model, 0) + entry.get("fee", 0)
+
+    return {
+        "summary": {
+            "total_fees": round(total_fees, 4),
+            "total_entries": total_entries,
+            "credits_remaining": round(credits_remaining, 4),
+            "starting_credits": starting_credits,
+            "usage_by_model": by_model,
+        }
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -880,8 +932,9 @@ async def run_workflow_endpoint(workflow_id: str, user=Depends(get_current_user)
 
 
 async def _execute_workflow(run_id: str, wf: Dict[str, Any], user_id: str):
-    """Execute workflow nodes in topological order with WebSocket streaming."""
-    import random
+    """Execute workflow nodes in topological order with real agent calls."""
+    import time as time_mod
+    from app.agents.dynamic_orchestrator import _run_agent_step
 
     await update_run(run_id, status="running")
     await ws_manager.send_to_user(user_id, workflow_event(run_id, "workflow_started"))
@@ -911,9 +964,12 @@ async def _execute_workflow(run_id: str, wf: Dict[str, Any], user_id: str):
                 queue.append(neighbour)
 
     node_results = {}
+    intermediate_results: Dict[str, Any] = {}
     overall_status = "completed"
+    # Use workflow description or first node's label as task context
+    task_context = wf.get("description") or wf.get("name") or "workflow execution"
 
-    for node_id in order:
+    for step_idx, node_id in enumerate(order):
         node_data = next((n for n in nodes if n["id"] == node_id), None)
         if not node_data:
             continue
@@ -927,16 +983,26 @@ async def _execute_workflow(run_id: str, wf: Dict[str, Any], user_id: str):
             workflow_event(run_id, "node_started", node_id, {"label": node_label, "type": node_type}),
         )
 
-        # Simulate execution (replace with real agent calls)
-        start_time = time.perf_counter()
-        duration = random.uniform(0.8, 2.5)
-        await asyncio.sleep(duration)
+        start_time = time_mod.perf_counter()
 
-        # 95% success rate
-        success = random.random() < 0.95
-        elapsed = round(time.perf_counter() - start_time, 3)
+        try:
+            # Execute the node using the real agent step runner
+            if node_type in ("web_search", "data_extraction", "reasoning", "comparison", "result_generator"):
+                result = await _run_agent_step(
+                    agent_type=node_type,
+                    task_input=task_context,
+                    task_id=run_id,
+                    step_index=step_idx + 1,
+                    key_queries=[task_context[:120]],
+                    intermediate_results=intermediate_results,
+                )
+                intermediate_results[node_type] = result
+            else:
+                # For unknown node types, log and skip gracefully
+                result = {"status": "skipped", "message": f"No handler for node type: {node_type}"}
 
-        if success:
+            elapsed = round(time_mod.perf_counter() - start_time, 3)
+
             node_results[node_id] = {
                 "status": "completed",
                 "output": f"{node_label} processed successfully",
@@ -950,10 +1016,14 @@ async def _execute_workflow(run_id: str, wf: Dict[str, Any], user_id: str):
                     "output": node_results[node_id]["output"],
                 }),
             )
-        else:
+
+        except Exception as exc:
+            elapsed = round(time_mod.perf_counter() - start_time, 3)
+            log.error("Workflow node %s (%s) failed: %s", node_id, node_type, exc)
+
             node_results[node_id] = {
                 "status": "error",
-                "output": f"{node_label} execution failed",
+                "output": f"{node_label} execution failed: {str(exc)[:200]}",
                 "duration": elapsed,
             }
             overall_status = "failed"

@@ -76,8 +76,11 @@ async def web_search(
                         "snippet": r.get("body", ""),
                         "position": idx + 1
                     })
-        except ImportError:
-            # Fallback to Wikipedia API
+        except Exception as exc:
+            log.warning("DuckDuckGo text search failed: %s", exc)
+
+        if not fallback_results:
+            # Fallback to Wikipedia API if DDG returned nothing
             try:
                 import urllib.parse
                 async with httpx.AsyncClient(timeout=10.0) as client:

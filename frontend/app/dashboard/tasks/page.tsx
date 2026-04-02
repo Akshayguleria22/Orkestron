@@ -23,6 +23,8 @@ import {
   CircleDashed,
   ShieldAlert,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 
 type StepStatus = "pending" | "running" | "completed" | "failed";
@@ -761,11 +763,13 @@ export default function TasksPage() {
                     Result
                   </h3>
 
-                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-emerald-300/80 mb-1">Result Text</p>
-                    <p className="text-sm text-foreground/95 whitespace-pre-wrap leading-relaxed">
-                      {selectedTask.result_text || selectedTask.result?.result_text || "No result_text returned"}
-                    </p>
+                  <div className="rounded-lg border border-emerald-500/20 bg-[#0d1117] p-5 shadow-inner overflow-hidden">
+                    <p className="text-[10px] uppercase tracking-wider text-emerald-300/80 mb-4 border-b border-emerald-500/20 pb-2 font-semibold">Verified Agent Result</p>
+                    <div className="prose prose-invert prose-emerald prose-sm max-w-none text-foreground/90 whitespace-normal marker:text-emerald-500">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {selectedTask.result_text || selectedTask.result?.result_text || "No result_text returned"}
+                      </ReactMarkdown>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   FlaskConical,
   Rocket,
@@ -598,14 +600,16 @@ export function TrainingPlayground({ className }: { className?: string }) {
             )}
 
             {/* Result Text */}
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] p-5">
-              <h4 className="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" />
-                Output
+            <div className="rounded-xl border border-emerald-500/20 bg-[#0d1117] p-6 shadow-inner">
+              <h4 className="text-sm font-semibold text-emerald-400 mb-4 flex items-center gap-2 border-b border-emerald-500/20 pb-2">
+                <CheckCircle2 className="w-5 h-5" />
+                Verified Output
               </h4>
-              <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto">
-                {result.result_text ||
-                  "No result text available. Check the Tasks page for full details."}
+              <div className="prose prose-invert prose-emerald prose-sm max-w-none text-foreground/90 whitespace-normal leading-relaxed max-h-[500px] overflow-y-auto marker:text-emerald-500 pr-2 custom-scrollbar">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {result.result_text ||
+                    "No result text available. Check the Tasks page for full details."}
+                </ReactMarkdown>
               </div>
             </div>
 

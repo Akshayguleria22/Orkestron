@@ -3,15 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  Brain,
-  Github,
-  ArrowRight,
-  Loader2,
-  UserPlus,
-  LogIn,
-} from "lucide-react";
+import Image from "next/image";
+import { Github, ArrowRight, Loader2, UserPlus, LogIn } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import logoImage from "@/lib/logo.png";
 
 export default function LoginPage() {
   const {
@@ -75,8 +70,14 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <Link href="/" className="group">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/10 border border-violet-500/20 flex items-center justify-center mb-4 group-hover:border-violet-500/40 transition-colors">
-              <Brain className="w-7 h-7 text-violet-400" />
+            <div className="relative w-14 h-14 rounded-2xl border border-violet-500/20 bg-white/[0.02] p-2 mb-4 group-hover:border-violet-500/40 transition-colors overflow-hidden">
+              <Image
+                src={logoImage}
+                alt="Orkestron logo"
+                fill
+                className="object-contain p-2"
+                priority
+              />
             </div>
           </Link>
           <h1 className="text-xl font-semibold tracking-tight font-display">

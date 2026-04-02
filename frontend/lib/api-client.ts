@@ -194,6 +194,11 @@ export const api = {
       headers: authHeaders(token),
     }),
 
+  getBillingSummary: (token: string) =>
+    request<{ summary: Record<string, unknown> }>("/billing/summary", {
+      headers: authHeaders(token),
+    }),
+
   // ─── Capabilities ───
   getCapabilities: () => request("/agents/capabilities"),
 

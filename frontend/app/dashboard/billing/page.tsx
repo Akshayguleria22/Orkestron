@@ -65,6 +65,7 @@ export default function BillingPage() {
   const [dailyUsage, setDailyUsage] = useState<UsageEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [ledger, setLedger] = useState<Record<string, unknown>[]>([]);
+  const [billingSummary, setBillingSummary] = useState<Record<string, unknown> | null>(null);
 
   const buildBillingData = useCallback(async () => {
     const token = getToken();
@@ -72,9 +73,10 @@ export default function BillingPage() {
 
     try {
       // Fetch real tasks
-      const [tasksRes, ledgerRes] = await Promise.allSettled([
+      const [tasksRes, ledgerRes, summaryRes] = await Promise.allSettled([
         api.listRealTasks(token, undefined, 100),
         api.getLedger(token, user?.id || "system"),
+        api.getBillingSummary(token),
       ]);
 
       const taskBillings: TaskBilling[] = [];
@@ -119,6 +121,11 @@ export default function BillingPage() {
         if (Array.isArray(entries)) {
           setLedger(entries);
         }
+      }
+
+      if (summaryRes.status === "fulfilled") {
+        const summaryData = summaryRes.value as Record<string, unknown>;
+        setBillingSummary((summaryData.summary || null) as Record<string, unknown> | null);
       }
 
       setTasks(taskBillings);
@@ -170,7 +177,13 @@ export default function BillingPage() {
       </div>
 
       {/* ─── KPI Cards ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <MetricsCard
+          title="Credits Remaining"
+          value={billingSummary ? `$${((billingSummary.credits_remaining as number) || 0).toFixed(2)}` : "$10.00"}
+          icon={CreditCard}
+          subtitle={billingSummary ? `of $${((billingSummary.starting_credits as number) || 10).toFixed(2)} total` : "Starting credits"}
+        />
         <MetricsCard
           title="Total Tasks"
           value={totalTasks.toString()}
@@ -178,8 +191,8 @@ export default function BillingPage() {
           subtitle={`${completedTasks} completed`}
         />
         <MetricsCard
-          title="Est. Cost"
-          value={`$${totalCost.toFixed(4)}`}
+          title="Total Fees"
+          value={billingSummary ? `$${((billingSummary.total_fees as number) || 0).toFixed(4)}` : `$${totalCost.toFixed(4)}`}
           icon={DollarSign}
           subtitle={`$${avgCostPerTask.toFixed(4)} avg/task`}
         />

@@ -258,7 +258,6 @@ async def execute_real_task(
         # ── Trigger Real Billing ──
         try:
             from app.billing.ledger import record_billing_entry
-            import uuid
             fee = 0.15 if len(agent_path) > 3 else 0.05
             await record_billing_entry(
                 user_id=user_id,

@@ -4,22 +4,22 @@
 
 @layer base {
   :root {
-    --background: 228 33% 4%;
-    --foreground: 210 40% 96%;
-    --card: 228 33% 7%;
-    --card-foreground: 210 40% 96%;
+    --background: 0 0% 0%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 2%;
+    --card-foreground: 0 0% 98%;
     --primary: 250 89% 63%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 228 33% 12%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 228 33% 12%;
-    --muted-foreground: 215 20% 55%;
+    --secondary: 240 5% 10%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 5% 10%;
+    --muted-foreground: 240 5% 65%;
     --accent: 250 89% 63%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 50.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 228 20% 14%;
-    --input: 228 33% 12%;
+    --border: 240 5% 14%;
+    --input: 240 5% 14%;
     --ring: 250 89% 63%;
     --radius: 0.75rem;
     --success: 160 84% 39%;
@@ -69,9 +69,9 @@
 /* Animated grid background */
 .grid-bg {
   background-image:
-    linear-gradient(rgba(124, 58, 237, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(124, 58, 237, 0.04) 1px, transparent 1px);
-  background-size: 40px 40px;
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
 }
 
 /* CSS-only float animations for background orbs */
@@ -116,6 +116,13 @@
 
 .text-gradient {
   @apply bg-clip-text text-transparent bg-gradient-to-r from-violet-400 via-purple-400 to-cyan-400;
+  background-size: 200% auto;
+  animation: text-shine 4s linear infinite;
+}
+
+@keyframes text-shine {
+  from { background-position: 0% center; }
+  to { background-position: 200% center; }
 }
 
 .text-gradient-gold {

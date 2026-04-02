@@ -244,9 +244,12 @@ export default function WorkflowsPage() {
       .map(asB);
   }, [nodes, edges]);
 
-  // ── Run Workflow ──
+  // ── Run Workflow (Real Backend Execution) ──
   const runWorkflow = useCallback(async () => {
     if (nodes.length === 0) return;
+    const token = getToken();
+    if (!token) return;
+
     execAbort.current = false;
     setExecStatus("running");
     setExecLogs([]);
@@ -260,82 +263,191 @@ export default function WorkflowsPage() {
       eds.map((e) => ({ ...e, data: { ...e.data, status: "idle" as const } })),
     );
 
-    const sorted = topoSort();
-
-    for (const node of sorted) {
-      if (execAbort.current) break;
-
-      // Mark node active
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === node.id
-            ? { ...n, data: { ...n.data, status: "active" as const } }
-            : n,
-        ),
-      );
-
-      // Mark incoming edges as flowing
-      setEdges((eds) =>
-        eds.map((e) =>
-          e.target === node.id
-            ? { ...e, data: { ...e.data, status: "flowing" as const } }
-            : e,
-        ),
-      );
-
-      // Simulated execution delay (800-2200ms)
-      const duration = 800 + Math.random() * 1400;
-      await new Promise((r) => setTimeout(r, duration));
-
-      if (execAbort.current) break;
-
-      // Mark completed
-      const success = Math.random() > 0.08; // 92% success rate
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === node.id
-            ? {
-                ...n,
-                data: {
-                  ...n.data,
-                  status: success ? ("completed" as const) : ("error" as const),
-                },
-              }
-            : n,
-        ),
-      );
-
-      // Mark incoming edges completed
-      setEdges((eds) =>
-        eds.map((e) =>
-          e.target === node.id
-            ? { ...e, data: { ...e.data, status: "completed" as const } }
-            : e,
-        ),
-      );
-
-      setExecLogs((prev) => [
-        ...prev,
-        {
-          nodeId: node.id,
-          label: node.data.label,
-          type: node.data.type,
-          status: success ? "completed" : "error",
-          message: success
-            ? `${node.data.label} completed successfully`
-            : `${node.data.label} encountered an error`,
-          duration: Math.round(duration),
-        },
-      ]);
-
-      if (!success) {
+    // Step 1: Auto-save the workflow to get a workflow_id
+    let workflowId = activeWorkflowId;
+    if (!workflowId) {
+      try {
+        const graphJson = {
+          nodes: nodes.map((n) => {
+            const d = asB(n).data;
+            return {
+              id: n.id,
+              type: d.type,
+              label: d.label,
+              position: n.position,
+              config: d.config,
+              data: { type: d.type, label: d.label },
+            };
+          }),
+          edges: edges.map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+          })),
+        };
+        const result = await api.createWorkflow(token, workflowName, graphJson);
+        const wf = result.workflow;
+        workflowId = getWorkflowId(wf);
+        setActiveWorkflowId(workflowId);
+        await fetchWorkflows();
+      } catch (err) {
+        console.error("Auto-save failed:", err);
         setExecStatus("error");
+        setExecLogs([{
+          nodeId: "system",
+          label: "System",
+          type: "system",
+          status: "error",
+          message: "Failed to save workflow before execution. Please save manually.",
+          duration: 0,
+        }]);
         return;
+      }
+    } else {
+      // Update existing workflow with current graph state
+      try {
+        const graphJson = {
+          nodes: nodes.map((n) => {
+            const d = asB(n).data;
+            return {
+              id: n.id,
+              type: d.type,
+              label: d.label,
+              position: n.position,
+              config: d.config,
+              data: { type: d.type, label: d.label },
+            };
+          }),
+          edges: edges.map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+          })),
+        };
+        await api.updateWorkflow(token, workflowId, {
+          name: workflowName,
+          graph_json: graphJson,
+        });
+      } catch {
+        // Continue with existing saved state
       }
     }
 
-    if (!execAbort.current) setExecStatus("completed");
-  }, [nodes, edges, topoSort, setNodes, setEdges]);
+    // Step 2: Start backend workflow execution
+    try {
+      const runResult = await api.runWorkflow(token, workflowId!);
+      const runData = runResult as Record<string, unknown>;
+      const run = runData.run as Record<string, unknown> | undefined;
+      const runId = (run?.run_id as string) || "";
+
+      // Step 3: Animate nodes in topo-sorted order with polling
+      const sorted = topoSort();
+      for (const node of sorted) {
+        if (execAbort.current) break;
+
+        // Mark node active
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === node.id
+              ? { ...n, data: { ...n.data, status: "active" as const } }
+              : n,
+          ),
+        );
+
+        // Mark incoming edges as flowing
+        setEdges((eds) =>
+          eds.map((e) =>
+            e.target === node.id
+              ? { ...e, data: { ...e.data, status: "flowing" as const } }
+              : e,
+          ),
+        );
+
+        // Wait for node execution (poll or timeout)
+        const start = Date.now();
+        await new Promise((r) => setTimeout(r, 1500)); // Base wait
+
+        if (execAbort.current) break;
+
+        // Poll for run status
+        let nodeSuccess = true;
+        try {
+          if (runId) {
+            const pollResult = await api.getRun(token, runId);
+            const pollRun = (pollResult as Record<string, unknown>).run as Record<string, unknown>;
+            const nodeResults = (pollRun?.node_results || {}) as Record<string, unknown>;
+            const nodeStatus = nodeResults[node.id] as Record<string, unknown> | undefined;
+            if (nodeStatus?.status === "error") {
+              nodeSuccess = false;
+            }
+          }
+        } catch {
+          // Continue — polling is best effort
+        }
+
+        const elapsed = Date.now() - start;
+
+        // Mark completed
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === node.id
+              ? {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    status: nodeSuccess ? ("completed" as const) : ("error" as const),
+                  },
+                }
+              : n,
+          ),
+        );
+
+        // Mark incoming edges completed
+        setEdges((eds) =>
+          eds.map((e) =>
+            e.target === node.id
+              ? { ...e, data: { ...e.data, status: "completed" as const } }
+              : e,
+          ),
+        );
+
+        setExecLogs((prev) => [
+          ...prev,
+          {
+            nodeId: node.id,
+            label: node.data.label,
+            type: node.data.type,
+            status: nodeSuccess ? "completed" : "error",
+            message: nodeSuccess
+              ? `${node.data.label} executed successfully`
+              : `${node.data.label} encountered an error`,
+            duration: elapsed,
+          },
+        ]);
+
+        if (!nodeSuccess) {
+          setExecStatus("error");
+          return;
+        }
+      }
+
+      if (!execAbort.current) setExecStatus("completed");
+    } catch (err) {
+      console.error("Workflow execution failed:", err);
+      setExecStatus("error");
+      setExecLogs((prev) => [
+        ...prev,
+        {
+          nodeId: "system",
+          label: "System",
+          type: "system",
+          status: "error",
+          message: "Backend execution failed. Is the backend running?",
+          duration: 0,
+        },
+      ]);
+    }
+  }, [nodes, edges, topoSort, setNodes, setEdges, getToken, activeWorkflowId, workflowName, fetchWorkflows]);
 
   const stopWorkflow = useCallback(() => {
     execAbort.current = true;

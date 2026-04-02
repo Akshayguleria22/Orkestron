@@ -40,7 +40,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed diagrams and compo
 | 1     | Semantic caching (Redis)         | ✅     |
 | 1     | Immutable audit logging          | ✅     |
 | 2     | LangGraph orchestration          | ✅     |
-| 2     | LLM intent classification       | ✅     |
+| 2     | LLM intent classification        | ✅     |
 | 3     | JWT authentication               | ✅     |
 | 3     | Delegation tokens (OBO)          | ✅     |
 | 3     | Agent registry                   | ✅     |

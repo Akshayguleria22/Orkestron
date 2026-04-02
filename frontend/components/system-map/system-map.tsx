@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -126,10 +126,7 @@ function SystemNode({ data }: { data: { component: ArchitectureComponent; isActi
   );
 }
 
-const nodeTypes = { systemNode: SystemNode };
-
 // ── Layout positions for the network graph ──
-
 const nodePositions: Record<string, { x: number; y: number }> = {
   supervisor: { x: 400, y: 40 },
   retrieval: { x: 100, y: 200 },
@@ -154,6 +151,8 @@ interface SystemMapProps {
 export function SystemMap({ className, onSelectComponent }: SystemMapProps) {
   const [activeNodes, setActiveNodes] = useState<Set<string>>(new Set(["supervisor"]));
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const nodeTypes = useMemo(() => ({ systemNode: SystemNode }), []);
 
   // Cycle active nodes to simulate a living system
   useEffect(() => {

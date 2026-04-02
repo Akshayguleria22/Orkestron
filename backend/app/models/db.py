@@ -8,7 +8,7 @@ Phase 5: adds BillingLedgerEntry and Invoice tables for outcome-based billing.
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSON
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -614,3 +614,16 @@ async def init_db() -> None:
     """Create all tables if they don't exist yet."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Keep old databases compatible when new columns are introduced.
+        await conn.execute(
+            text(
+                "ALTER TABLE deployable_agents "
+                "ADD COLUMN IF NOT EXISTS workflow_id VARCHAR(128)"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_deployable_agents_workflow_id "
+                "ON deployable_agents (workflow_id)"
+            )
+        )

@@ -422,7 +422,6 @@ async def execute_agent(
         # ── Trigger Real Billing ──
         try:
             from app.billing.ledger import record_billing_entry
-            import uuid
             # Deployed agents have a higher fee
             fee = 0.25 if workflow_id else 0.10
             await record_billing_entry(

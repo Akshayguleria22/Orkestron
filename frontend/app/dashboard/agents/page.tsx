@@ -80,16 +80,20 @@ export default function AgentsPage() {
     category: "",
     tags: "",
     icon: "🤖",
+    workflow_id: "",
   });
   const [deploying, setDeploying] = useState(false);
+  const [workflows, setWorkflows] = useState<any[]>([]);
 
   const fetchAgents = useCallback(async () => {
     try {
       if (token) {
-        const data = await api.listPlatformAgents(token, {
-          search: searchQuery || undefined,
-        });
-        setAgents((data.agents || []) as unknown as PlatformAgent[]);
+        const [agentsData, workflowsData] = await Promise.all([
+          api.listPlatformAgents(token, { search: searchQuery || undefined }),
+          api.listWorkflows(token).catch(() => ({ workflows: [] })),
+        ]);
+        setAgents((agentsData.agents || []) as unknown as PlatformAgent[]);
+        setWorkflows(workflowsData.workflows || []);
       } else {
         const data = await api.listPublicAgents({
           search: searchQuery || undefined,
@@ -126,12 +130,13 @@ export default function AgentsPage() {
         category: deployForm.category || undefined,
         tags: deployForm.tags.split(",").map((t) => t.trim()).filter(Boolean),
         icon: deployForm.icon || undefined,
+        workflow_id: deployForm.workflow_id || undefined,
       });
       setShowDeploy(false);
       setDeployForm({
         name: "", description: "", agent_type: "hybrid",
         visibility: "public", system_prompt: "", tools: [],
-        category: "", tags: "", icon: "🤖",
+        category: "", tags: "", icon: "🤖", workflow_id: "",
       });
       await fetchAgents();
     } catch {}
@@ -486,6 +491,21 @@ export default function AgentsPage() {
                     >
                       <option value="public" className="bg-[#0d1117]">Public</option>
                       <option value="private" className="bg-[#0d1117]">Private</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-muted-foreground mb-1">Workflow (Optional)</label>
+                    <select
+                      value={deployForm.workflow_id}
+                      onChange={(e) => setDeployForm({ ...deployForm, workflow_id: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-sm"
+                    >
+                      <option value="" className="bg-[#0d1117]">None (Default Orchestrator)</option>
+                      {workflows.map((wf) => (
+                        <option key={wf.workflow_id} value={wf.workflow_id} className="bg-[#0d1117]">
+                          {wf.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

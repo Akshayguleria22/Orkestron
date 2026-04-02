@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -16,8 +16,6 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { AgentNode } from "./agent-node";
 
-// Register custom node types
-const nodeTypes = { agentNode: AgentNode };
 
 interface WorkflowStep {
   id: string;
@@ -99,6 +97,7 @@ export function WorkflowVisualizer({
   const [nodes, setNodes, onNodesChange] = useNodesState(buildNodes(steps));
   const [edges, setEdges, onEdgesChange] = useEdgesState(buildEdges(steps));
   const [currentSteps, setCurrentSteps] = useState(steps);
+  const nodeTypes = useMemo(() => ({ agentNode: AgentNode }), []);
 
   // Animate steps progressing through the workflow
   useEffect(() => {
