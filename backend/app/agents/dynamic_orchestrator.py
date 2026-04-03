@@ -499,8 +499,8 @@ def _validate_agent_output(agent_type: str, output: Dict[str, Any]) -> tuple[boo
 
     if agent_type == "web_search":
         results = output.get("results")
-        if not isinstance(results, list) or len(results) == 0:
-            return False, "web_search returned no results"
+        if not isinstance(results, list):
+            return False, "web_search results must be a list"
         return True, ""
 
     if agent_type == "data_extraction":

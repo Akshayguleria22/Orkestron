@@ -7,11 +7,21 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings
 
-# Resolve .env: check backend/.env first, then project root .env
+# Resolve .env files: load backend/.env first, then project root .env.
+# When both exist, root values can override backend defaults.
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
-_ENV_FILE = _BACKEND_DIR / ".env"
-if not _ENV_FILE.exists():
-    _ENV_FILE = _BACKEND_DIR.parent / ".env"
+_BACKEND_ENV_FILE = _BACKEND_DIR / ".env"
+_ROOT_ENV_FILE = _BACKEND_DIR.parent / ".env"
+
+_ENV_FILES: list[str] = []
+if _BACKEND_ENV_FILE.exists():
+    _ENV_FILES.append(str(_BACKEND_ENV_FILE))
+if _ROOT_ENV_FILE.exists():
+    _ENV_FILES.append(str(_ROOT_ENV_FILE))
+
+# Keep a sensible default path for local dev when files are missing.
+if not _ENV_FILES:
+    _ENV_FILES.append(str(_BACKEND_ENV_FILE))
 
 
 class Settings(BaseSettings):
@@ -90,7 +100,7 @@ class Settings(BaseSettings):
     smtp_from_email: str = "noreply@orkestron.ai"
     sendgrid_api_key: str = ""
 
-    model_config = {"env_file": str(_ENV_FILE), "env_file_encoding": "utf-8"}
+    model_config = {"env_file": tuple(_ENV_FILES), "env_file_encoding": "utf-8"}
 
 
 settings = Settings()

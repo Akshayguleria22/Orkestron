@@ -18,6 +18,7 @@ import {
   ChevronRight,
   ExternalLink,
   RefreshCw,
+  Trash2,
   ListTodo,
   AlertTriangle,
   CircleDashed,
@@ -131,6 +132,7 @@ export default function TasksPage() {
   const [logs, setLogs] = useState<ExecutionLogView[]>([]);
   const [logsExpanded, setLogsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({
     planner: true,
   });
@@ -306,6 +308,24 @@ export default function TasksPage() {
     }
   }, [token]);
 
+  const deleteTaskFromHistory = useCallback(
+    async (taskId: string) => {
+      if (!token) return;
+      setDeletingTaskId(taskId);
+      try {
+        await api.deleteRealTask(token, taskId);
+        setTasks((prev) => prev.filter((t) => t.task_id !== taskId));
+        if (selectedTask?.task_id === taskId) {
+          setSelectedTask(null);
+          setLogs([]);
+        }
+      } finally {
+        setDeletingTaskId(null);
+      }
+    },
+    [token, selectedTask?.task_id],
+  );
+
   const fetchTask = useCallback(async (taskId: string) => {
     if (!token) return;
     try {
@@ -463,7 +483,7 @@ export default function TasksPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-            placeholder="Describe your task... e.g. &quot;Find cheapest RTX 4070 under ₹60,000&quot;"
+            placeholder='Describe your task... e.g. "Find cheapest RTX 4070 under ₹60,000"'
             className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:border-violet-500/40 transition-colors"
           />
           <button
@@ -471,7 +491,11 @@ export default function TasksPage() {
             disabled={!input.trim() || submitting}
             className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-violet-600/20"
           >
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {submitting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
             Submit
           </button>
         </div>
@@ -493,11 +517,18 @@ export default function TasksPage() {
         {/* Task List */}
         <div className="lg:col-span-1 space-y-2">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium text-muted-foreground">Recent Tasks</h3>
-            <button onClick={fetchTasks} className="text-muted-foreground hover:text-foreground transition-colors">
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Recent Tasks
+            </h3>
+            <button
+              onClick={fetchTasks}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="Refresh tasks"
+            >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
+
           {loading ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
               <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
@@ -514,29 +545,68 @@ export default function TasksPage() {
                 const Icon = sc.icon;
                 const isActive = selectedTask?.task_id === task.task_id;
                 return (
-                  <button
+                  <div
                     key={task.task_id}
-                    onClick={() => selectTask(task)}
                     className={cn(
-                      "w-full text-left rounded-lg border p-3 transition-all",
+                      "w-full rounded-lg border p-3 transition-all",
                       isActive
                         ? "border-violet-500/30 bg-violet-500/[0.06]"
-                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]"
+                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]",
                     )}
                   >
                     <div className="flex items-start gap-2">
-                      <Icon className={cn("w-4 h-4 mt-0.5 shrink-0", sc.color, task.status === "running" && "animate-spin")} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate">{task.input}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={cn("text-[10px] font-medium", sc.color)}>{sc.label}</span>
-                          {task.total_duration && (
-                            <span className="text-[10px] text-muted-foreground">{task.total_duration.toFixed(1)}s</span>
+                      <button
+                        onClick={() => selectTask(task)}
+                        className="flex flex-1 items-start gap-2 text-left"
+                      >
+                        <Icon
+                          className={cn(
+                            "w-4 h-4 mt-0.5 shrink-0",
+                            sc.color,
+                            task.status === "running" && "animate-spin",
                           )}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm truncate">{task.input}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span
+                              className={cn(
+                                "text-[10px] font-medium",
+                                sc.color,
+                              )}
+                            >
+                              {sc.label}
+                            </span>
+                            {task.total_duration && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {task.total_duration.toFixed(1)}s
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      </button>
+
+                      <button
+                        onClick={() => deleteTaskFromHistory(task.task_id)}
+                        disabled={
+                          deletingTaskId === task.task_id ||
+                          task.status === "running"
+                        }
+                        className="p-1.5 rounded-md border border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:text-red-300 hover:border-red-500/30 disabled:opacity-40"
+                        title={
+                          task.status === "running"
+                            ? "Cannot remove running task"
+                            : "Remove from history"
+                        }
+                      >
+                        {deletingTaskId === task.task_id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -557,12 +627,29 @@ export default function TasksPage() {
                   {(() => {
                     const sc = statusConfig(selectedTask.status);
                     const Icon = sc.icon;
-                    return <Icon className={cn("w-5 h-5 mt-0.5 shrink-0", sc.color, selectedTask.status === "running" && "animate-spin")} />;
+                    return (
+                      <Icon
+                        className={cn(
+                          "w-5 h-5 mt-0.5 shrink-0",
+                          sc.color,
+                          selectedTask.status === "running" && "animate-spin",
+                        )}
+                      />
+                    );
                   })()}
                   <div className="flex-1">
                     <p className="font-medium">{selectedTask.input}</p>
                     <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                      <span className={cn("px-2 py-0.5 rounded border text-[10px] font-medium", STATUS_BADGE[statusConfig(selectedTask.status).label.toLowerCase() as StepStatus] || STATUS_BADGE.pending)}>
+                      <span
+                        className={cn(
+                          "px-2 py-0.5 rounded border text-[10px] font-medium",
+                          STATUS_BADGE[
+                            statusConfig(
+                              selectedTask.status,
+                            ).label.toLowerCase() as StepStatus
+                          ] || STATUS_BADGE.pending,
+                        )}
+                      >
                         {statusConfig(selectedTask.status).label}
                       </span>
                       {selectedTask.task_type && (
@@ -571,7 +658,9 @@ export default function TasksPage() {
                         </span>
                       )}
                       {selectedTask.total_duration && (
-                        <span>Completed in {selectedTask.total_duration.toFixed(1)}s</span>
+                        <span>
+                          Completed in {selectedTask.total_duration.toFixed(1)}s
+                        </span>
                       )}
                     </div>
                   </div>
@@ -600,25 +689,33 @@ export default function TasksPage() {
                 </div>
 
                 {/* Agent Path */}
-                {selectedTask.agent_path && selectedTask.agent_path.length > 0 && (
-                  <div className="mt-4 flex flex-wrap items-center gap-1.5">
-                    {selectedTask.agent_path.map((agent, i) => {
-                      const colors = AGENT_COLORS[agent] || "text-zinc-400 bg-zinc-500/10 border-zinc-500/30";
-                      const AgentIcon = AGENT_ICONS[agent] || Brain;
-                      return (
-                        <div key={i} className="flex items-center gap-1.5">
-                          <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px]", colors)}>
-                            <AgentIcon className="w-3 h-3" />
-                            {agent}
-                          </span>
-                          {i < selectedTask.agent_path!.length - 1 && (
-                            <ChevronRight className="w-3 h-3 text-zinc-600" />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                {selectedTask.agent_path &&
+                  selectedTask.agent_path.length > 0 && (
+                    <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                      {selectedTask.agent_path.map((agent, i) => {
+                        const colors =
+                          AGENT_COLORS[agent] ||
+                          "text-zinc-400 bg-zinc-500/10 border-zinc-500/30";
+                        const AgentIcon = AGENT_ICONS[agent] || Brain;
+                        return (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px]",
+                                colors,
+                              )}
+                            >
+                              <AgentIcon className="w-3 h-3" />
+                              {agent}
+                            </span>
+                            {i < selectedTask.agent_path!.length - 1 && (
+                              <ChevronRight className="w-3 h-3 text-zinc-600" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
               </div>
 
               {/* Warnings and Errors */}
@@ -630,11 +727,16 @@ export default function TasksPage() {
                       Warnings ({warnings.length})
                     </h3>
                     {warnings.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No warnings</p>
+                      <p className="text-xs text-muted-foreground">
+                        No warnings
+                      </p>
                     ) : (
                       <ul className="space-y-1.5">
                         {warnings.map((warning, idx) => (
-                          <li key={`${warning}-${idx}`} className="text-xs text-amber-100/90 leading-relaxed">
+                          <li
+                            key={`${warning}-${idx}`}
+                            className="text-xs text-amber-100/90 leading-relaxed"
+                          >
                             {warning}
                           </li>
                         ))}
@@ -648,14 +750,20 @@ export default function TasksPage() {
                       Step Errors ({stepErrors.length})
                     </h3>
                     {stepErrors.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No step errors</p>
+                      <p className="text-xs text-muted-foreground">
+                        No step errors
+                      </p>
                     ) : (
                       <ul className="space-y-2">
                         {stepErrors.map((entry, idx) => (
-                          <li key={`${entry.error}-${idx}`} className="text-xs text-red-100/90 leading-relaxed">
+                          <li
+                            key={`${entry.error}-${idx}`}
+                            className="text-xs text-red-100/90 leading-relaxed"
+                          >
                             <span className="font-medium">
                               {entry.agent || "unknown step"}
-                              {typeof entry.step === "number" && ` (step ${entry.step})`}
+                              {typeof entry.step === "number" &&
+                                ` (step ${entry.step})`}
                               :
                             </span>{" "}
                             {entry.error}
@@ -675,7 +783,8 @@ export default function TasksPage() {
                     Execution Timeline
                   </h3>
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    planner → web_search → data_extraction → reasoning → comparison → result_generator
+                    planner → web_search → data_extraction → reasoning →
+                    comparison → result_generator
                   </span>
                 </div>
 
@@ -683,22 +792,36 @@ export default function TasksPage() {
                   {stepList.map((step) => {
                     const StepIcon = AGENT_ICONS[step.key] || Brain;
                     const expanded = Boolean(expandedSteps[step.key]);
-                    const color = AGENT_COLORS[step.key] || "text-zinc-300 bg-zinc-500/10 border-zinc-500/30";
+                    const color =
+                      AGENT_COLORS[step.key] ||
+                      "text-zinc-300 bg-zinc-500/10 border-zinc-500/30";
                     return (
-                      <div key={step.key} className="rounded-lg border border-white/[0.06] bg-white/[0.01]">
+                      <div
+                        key={step.key}
+                        className="rounded-lg border border-white/[0.06] bg-white/[0.01]"
+                      >
                         <button
                           onClick={() => toggleStep(step.key)}
                           className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-white/[0.03] transition-colors"
                         >
-                          <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px]", color)}>
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px]",
+                              color,
+                            )}
+                          >
                             <StepIcon className="w-3 h-3" />
                             {step.label}
                           </span>
                           {statusPill(step.status)}
                           {step.durationMs ? (
-                            <span className="text-[11px] text-muted-foreground">{Math.round(step.durationMs)}ms</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {Math.round(step.durationMs)}ms
+                            </span>
                           ) : (
-                            <span className="text-[11px] text-muted-foreground">duration: n/a</span>
+                            <span className="text-[11px] text-muted-foreground">
+                              duration: n/a
+                            </span>
                           )}
                           {step.retryUsed && (
                             <span className="text-[10px] px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300">
@@ -711,40 +834,68 @@ export default function TasksPage() {
                             </span>
                           )}
                           <span className="ml-auto text-muted-foreground">
-                            <ChevronDown className={cn("w-4 h-4 transition-transform", expanded && "rotate-180")} />
+                            <ChevronDown
+                              className={cn(
+                                "w-4 h-4 transition-transform",
+                                expanded && "rotate-180",
+                              )}
+                            />
                           </span>
                         </button>
 
                         {expanded && (
                           <div className="px-3 pb-3 pt-1 border-t border-white/[0.05] grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5">
-                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Input</p>
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                                Input
+                              </p>
                               <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">
                                 {step.inputSummary || "No input data available"}
                               </p>
                             </div>
 
                             <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5">
-                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Output</p>
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                                Output
+                              </p>
                               <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">
-                                {step.outputSummary || "No output summary available"}
+                                {step.outputSummary ||
+                                  "No output summary available"}
                               </p>
                             </div>
 
                             <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5">
-                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Error</p>
-                              <p className={cn("text-xs leading-relaxed", step.error ? "text-red-300" : "text-muted-foreground")}>
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                                Error
+                              </p>
+                              <p
+                                className={cn(
+                                  "text-xs leading-relaxed",
+                                  step.error
+                                    ? "text-red-300"
+                                    : "text-muted-foreground",
+                                )}
+                              >
                                 {step.error || "No error"}
                               </p>
                             </div>
 
                             <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5">
-                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Step Metadata</p>
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                                Step Metadata
+                              </p>
                               <div className="text-xs text-muted-foreground space-y-1">
                                 <p>Step: {step.stepNumber ?? "n/a"}</p>
                                 <p>Retry attempts: {step.retryAttempts || 0}</p>
-                                <p>Tools: {step.toolsUsed.length ? step.toolsUsed.join(", ") : "n/a"}</p>
-                                <p>Planned action: {step.plannedAction || "n/a"}</p>
+                                <p>
+                                  Tools:{" "}
+                                  {step.toolsUsed.length
+                                    ? step.toolsUsed.join(", ")
+                                    : "n/a"}
+                                </p>
+                                <p>
+                                  Planned action: {step.plannedAction || "n/a"}
+                                </p>
                               </div>
                             </div>
                           </div>
@@ -764,29 +915,46 @@ export default function TasksPage() {
                   </h3>
 
                   <div className="rounded-lg border border-emerald-500/20 bg-[#0d1117] p-5 shadow-inner overflow-hidden">
-                    <p className="text-[10px] uppercase tracking-wider text-emerald-300/80 mb-4 border-b border-emerald-500/20 pb-2 font-semibold">Verified Agent Result</p>
+                    <p className="text-[10px] uppercase tracking-wider text-emerald-300/80 mb-4 border-b border-emerald-500/20 pb-2 font-semibold">
+                      Verified Agent Result
+                    </p>
                     <div className="prose prose-invert prose-emerald prose-sm max-w-none text-foreground/90 whitespace-normal marker:text-emerald-500">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {selectedTask.result_text || selectedTask.result?.result_text || "No result_text returned"}
+                        {selectedTask.result_text ||
+                          selectedTask.result?.result_text ||
+                          "No result_text returned"}
                       </ReactMarkdown>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Summary</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                        Summary
+                      </p>
                       <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">
                         {resultSummary}
                       </p>
                     </div>
 
                     <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3 md:col-span-2">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Metadata</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                        Metadata
+                      </p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
-                        <span>Task type: {selectedTask.task_type || "n/a"}</span>
+                        <span>
+                          Task type: {selectedTask.task_type || "n/a"}
+                        </span>
                         <span>Status: {selectedTask.status}</span>
-                        <span>Duration: {selectedTask.total_duration ? `${selectedTask.total_duration.toFixed(2)}s` : "n/a"}</span>
-                        <span>Agents run: {selectedTask.agent_path?.length || 0}</span>
+                        <span>
+                          Duration:{" "}
+                          {selectedTask.total_duration
+                            ? `${selectedTask.total_duration.toFixed(2)}s`
+                            : "n/a"}
+                        </span>
+                        <span>
+                          Agents run: {selectedTask.agent_path?.length || 0}
+                        </span>
                         <span>Warnings: {warnings.length}</span>
                         <span>Step errors: {stepErrors.length}</span>
                         <span>Intermediate keys: {iKeys.length}</span>
@@ -796,7 +964,9 @@ export default function TasksPage() {
                   </div>
 
                   <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Sources</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                      Sources
+                    </p>
                     {resultSources.length > 0 ? (
                       <div className="space-y-1">
                         {resultSources.slice(0, 10).map((source, i) => (
@@ -808,21 +978,30 @@ export default function TasksPage() {
                             className="flex items-center gap-2 text-xs text-muted-foreground hover:text-violet-400 transition-colors"
                           >
                             <ExternalLink className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{source.title || source.url}</span>
+                            <span className="truncate">
+                              {source.title || source.url}
+                            </span>
                           </a>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground">No sources returned.</p>
+                      <p className="text-xs text-muted-foreground">
+                        No sources returned.
+                      </p>
                     )}
                   </div>
 
                   {iKeys.length > 0 && (
                     <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Intermediate Keys</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                        Intermediate Keys
+                      </p>
                       <div className="flex flex-wrap gap-1.5">
                         {iKeys.map((key) => (
-                          <span key={key} className="text-[10px] px-2 py-0.5 rounded border border-white/[0.08] bg-white/[0.03] text-muted-foreground">
+                          <span
+                            key={key}
+                            className="text-[10px] px-2 py-0.5 rounded border border-white/[0.08] bg-white/[0.03] text-muted-foreground"
+                          >
                             {key}
                           </span>
                         ))}
@@ -833,15 +1012,18 @@ export default function TasksPage() {
               )}
 
               {/* Error */}
-              {selectedTask.status === "failed" && selectedTask.error_message && (
-                <div className="rounded-xl border border-red-500/20 bg-red-500/[0.03] p-5">
-                  <h3 className="text-sm font-semibold text-red-400 mb-2 flex items-center gap-2">
-                    <XCircle className="w-4 h-4" />
-                    Error
-                  </h3>
-                  <p className="text-sm text-red-300/80">{selectedTask.error_message}</p>
-                </div>
-              )}
+              {selectedTask.status === "failed" &&
+                selectedTask.error_message && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/[0.03] p-5">
+                    <h3 className="text-sm font-semibold text-red-400 mb-2 flex items-center gap-2">
+                      <XCircle className="w-4 h-4" />
+                      Error
+                    </h3>
+                    <p className="text-sm text-red-300/80">
+                      {selectedTask.error_message}
+                    </p>
+                  </div>
+                )}
 
               {/* In-progress indicator */}
               {selectedTask.status === "running" && (
@@ -867,31 +1049,54 @@ export default function TasksPage() {
                   >
                     <span className="flex items-center gap-2">
                       Raw Execution Logs
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-muted-foreground">{logs.length}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-muted-foreground">
+                        {logs.length}
+                      </span>
                     </span>
-                    <ChevronDown className={cn("w-4 h-4 transition-transform", logsExpanded && "rotate-180")} />
+                    <ChevronDown
+                      className={cn(
+                        "w-4 h-4 transition-transform",
+                        logsExpanded && "rotate-180",
+                      )}
+                    />
                   </button>
                   {logsExpanded && (
                     <div className="px-4 pb-4 space-y-2">
                       {logs.map((log) => {
-                        const colors = AGENT_COLORS[log.agent_type] || "text-zinc-400 bg-zinc-500/10 border-zinc-500/30";
+                        const colors =
+                          AGENT_COLORS[log.agent_type] ||
+                          "text-zinc-400 bg-zinc-500/10 border-zinc-500/30";
                         return (
-                          <div key={log.id} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                            <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] shrink-0 mt-0.5", colors)}>
+                          <div
+                            key={log.id}
+                            className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]"
+                          >
+                            <span
+                              className={cn(
+                                "inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] shrink-0 mt-0.5",
+                                colors,
+                              )}
+                            >
                               {log.agent_type}
                             </span>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 {statusPill(normalizeStatus(log.status))}
                                 {log.duration_ms && (
-                                  <span className="text-[10px] text-muted-foreground">{log.duration_ms}ms</span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {log.duration_ms}ms
+                                  </span>
                                 )}
                               </div>
                               {log.output_summary && (
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{log.output_summary}</p>
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                  {log.output_summary}
+                                </p>
                               )}
                               {log.error && (
-                                <p className="text-xs text-red-400/80 mt-1">{log.error}</p>
+                                <p className="text-xs text-red-400/80 mt-1">
+                                  {log.error}
+                                </p>
                               )}
                               {log.tools_used && log.tools_used.length > 0 && (
                                 <p className="text-[10px] text-muted-foreground mt-1">

@@ -208,11 +208,18 @@ export function WorkflowCanvas({
           nodeColor={(node) => {
             const t = (node.data as BuilderNodeData)?.type;
             const colors: Record<string, string> = {
+              planner: "#6366F1",
+              web_search: "#06B6D4",
+              data_extraction: "#F59E0B",
+              reasoning: "#22C55E",
+              comparison: "#8B5CF6",
+              result_generator: "#F97316",
+              // Legacy aliases for previously saved workflows
               supervisor: "#6366F1",
               retrieval: "#06B6D4",
               negotiation: "#F59E0B",
-              compliance: "#22C55E",
-              executor: "#8B5CF6",
+              compliance: "#8B5CF6",
+              executor: "#F97316",
             };
             return colors[t] || "#6366F1";
           }}

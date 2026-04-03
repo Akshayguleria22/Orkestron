@@ -239,6 +239,30 @@ export const api = {
     });
   },
 
+  deleteRealTask: (token: string, taskId: string) =>
+    request<{ deleted: number; task_id: string }>(`/tasks/real/${taskId}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }),
+
+  clearTaskHistory: (token: string, status = "completed,failed") =>
+    request<{ deleted: number; statuses: string[] }>(
+      `/tasks/real?status=${encodeURIComponent(status)}`,
+      {
+        method: "DELETE",
+        headers: authHeaders(token),
+      }
+    ),
+
+  cleanupPendingTasks: (token: string, olderThanHours = 24) =>
+    request<{ deleted: number; older_than_hours: number; statuses: string[] }>(
+      `/tasks/real/pending?older_than_hours=${olderThanHours}`,
+      {
+        method: "DELETE",
+        headers: authHeaders(token),
+      }
+    ),
+
   getTaskLogs: (token: string, taskId: string) =>
     request<{ logs: Record<string, unknown>[] }>(`/tasks/real/${taskId}/logs`, {
       headers: authHeaders(token),
@@ -369,4 +393,3 @@ export const api = {
   getMLTools: () =>
     request<{ tools: Record<string, unknown>[]; count: number }>("/platform/ml-tools"),
 };
-

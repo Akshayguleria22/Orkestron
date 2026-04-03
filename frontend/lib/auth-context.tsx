@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       : null;
 
     if (code && stateParam && provider) {
-      handleOAuthCallback(provider, code, stateParam);
+      void handleOAuthCallback(provider, code, stateParam);
       // Clean URL
       window.history.replaceState({}, "", window.location.pathname);
     }
@@ -133,7 +133,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ code, state }),
       });
 
-      if (!res.ok) throw new Error("OAuth callback failed");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "OAuth callback failed");
+      }
 
       const data = await res.json();
       const authData = {
@@ -150,8 +153,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: true,
         isLoading: false,
       });
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("orkestron:auth:oauth-success"));
+      }
     } catch (err) {
       console.error("OAuth callback error:", err);
+      if (typeof window !== "undefined") {
+        const message =
+          err instanceof Error ? err.message : "OAuth callback failed";
+        window.dispatchEvent(
+          new CustomEvent("orkestron:auth:oauth-error", {
+            detail: { message },
+          }),
+        );
+      }
       setState((s) => ({ ...s, isLoading: false }));
     }
   }

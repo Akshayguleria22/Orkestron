@@ -17,11 +17,15 @@ import {
   Zap,
   Loader2,
   SkipForward,
-  Eye,
+  Trash2,
+  Search as SearchIcon,
+  Filter,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type ReplayTask = {
   task_id: string;
@@ -33,7 +37,9 @@ type ReplayTask = {
   created_at?: string;
   completed_at?: string;
   plan?: { steps: { step: number; agent: string; action: string }[] };
+  result?: { result_text?: string; summary?: string; [key: string]: unknown };
   result_text?: string;
+  error_message?: string;
 };
 
 type ReplayStep = {
@@ -67,6 +73,9 @@ export default function ReplayPage() {
   const [tasks, setTasks] = useState<ReplayTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<ReplayTask | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [failedOnly, setFailedOnly] = useState(false);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
   const [speed, setSpeed] = useState(1);
@@ -95,6 +104,26 @@ export default function ReplayPage() {
     } catch {}
     setLoading(false);
   }, [getToken]);
+
+  const deleteTaskFromHistory = useCallback(
+    async (taskId: string) => {
+      const token = getToken();
+      if (!token) return;
+      setDeletingTaskId(taskId);
+      try {
+        await api.deleteRealTask(token, taskId);
+        setTasks((prev) => prev.filter((t) => t.task_id !== taskId));
+        if (selectedTask?.task_id === taskId) {
+          setSelectedTask(null);
+          setCurrentStep(-1);
+          setPlaying(false);
+        }
+      } finally {
+        setDeletingTaskId(null);
+      }
+    },
+    [getToken, selectedTask?.task_id],
+  );
 
   // Fetch full task data for replay
   const loadTaskForReplay = useCallback(async (taskId: string) => {
@@ -200,6 +229,20 @@ export default function ReplayPage() {
     return `${Math.floor(diff / 86400000)}d ago`;
   };
 
+  const filteredTasks = tasks.filter((task) => {
+    if (failedOnly && task.status !== "failed") return false;
+    if (!searchQuery.trim()) return true;
+    const haystack =
+      `${task.input} ${task.task_type || ""} ${task.task_id}`.toLowerCase();
+    return haystack.includes(searchQuery.trim().toLowerCase());
+  });
+
+  const resultText =
+    selectedTask?.result_text ||
+    selectedTask?.result?.result_text ||
+    selectedTask?.result?.summary ||
+    "";
+
   return (
     <div className="space-y-6 max-w-[1400px]">
       <div>
@@ -208,58 +251,114 @@ export default function ReplayPage() {
           Task Replay
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Step through your completed task executions — see how each agent processed your request
+          Step through your completed task executions — see how each agent
+          processed your request
         </p>
+      </div>
+
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5 flex flex-wrap items-center gap-2.5">
+        <div className="relative flex-1 min-w-[220px]">
+          <SearchIcon className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by input, type or task id..."
+            className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] pl-9 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-amber-500/30"
+          />
+        </div>
+
+        <button
+          onClick={() => setFailedOnly((v) => !v)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-colors",
+            failedOnly
+              ? "border-red-500/30 bg-red-500/10 text-red-300"
+              : "border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Filter className="w-3.5 h-3.5" />
+          Failed only
+        </button>
+
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Task list */}
         <div className="lg:col-span-1 space-y-2">
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">Completed Tasks</h3>
+          <h3 className="text-sm font-medium text-muted-foreground mb-2">
+            Replay History ({filteredTasks.length})
+          </h3>
 
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
             </div>
-          ) : tasks.length === 0 ? (
+          ) : filteredTasks.length === 0 ? (
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.01] p-8 text-center">
               <History className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No completed tasks to replay</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Submit tasks first</p>
+              <p className="text-sm text-muted-foreground">
+                No replay tasks found
+              </p>
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                Try adjusting search/filters
+              </p>
             </div>
           ) : (
             <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
-              {tasks.map((task) => (
-                <button
+              {filteredTasks.map((task) => (
+                <div
                   key={task.task_id}
-                  onClick={() => loadTaskForReplay(task.task_id)}
                   className={cn(
-                    "w-full text-left rounded-lg border p-3 transition-all",
+                    "rounded-lg border p-3 transition-all",
                     selectedTask?.task_id === task.task_id
                       ? "border-amber-500/30 bg-amber-500/[0.06]"
                       : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]",
                   )}
                 >
                   <div className="flex items-start gap-2">
-                    {task.status === "completed" ? (
-                      <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
-                    ) : (
-                      <XCircle className="w-4 h-4 mt-0.5 text-red-400 shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{task.input}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {task.task_type && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] text-muted-foreground">{task.task_type}</span>
-                        )}
-                        {task.total_duration && (
-                          <span className="text-[10px] text-muted-foreground">{task.total_duration.toFixed(1)}s</span>
-                        )}
-                        <span className="text-[10px] text-muted-foreground ml-auto">{timeAgo(task.created_at)}</span>
+                    <button
+                      onClick={() => loadTaskForReplay(task.task_id)}
+                      className="flex flex-1 items-start gap-2 text-left"
+                    >
+                      {task.status === "completed" ? (
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 mt-0.5 text-red-400 shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm truncate">{task.input}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {task.task_type && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] text-muted-foreground">
+                              {task.task_type}
+                            </span>
+                          )}
+                          {task.total_duration && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {task.total_duration.toFixed(1)}s
+                            </span>
+                          )}
+                          <span className="text-[10px] text-muted-foreground ml-auto">
+                            {timeAgo(task.created_at)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                    </button>
+
+                    <button
+                      onClick={() => deleteTaskFromHistory(task.task_id)}
+                      disabled={deletingTaskId === task.task_id}
+                      className="p-1.5 rounded-md border border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:text-red-300 hover:border-red-500/30 disabled:opacity-50"
+                      title="Remove from history"
+                    >
+                      {deletingTaskId === task.task_id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}
@@ -270,24 +369,40 @@ export default function ReplayPage() {
           {!selectedTask ? (
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.01] flex flex-col items-center justify-center py-20 text-center">
               <Play className="w-12 h-12 text-zinc-700 mb-4" />
-              <h3 className="text-lg font-medium text-zinc-400">Select a Task to Replay</h3>
+              <h3 className="text-lg font-medium text-zinc-400">
+                Select a Task to Replay
+              </h3>
               <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                Choose a completed task from the list to watch its execution step-by-step
+                Choose a completed task from the list to watch its execution
+                step-by-step
               </p>
             </div>
           ) : (
             <div className="space-y-4">
               {/* Task info */}
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-                <h3 className="text-sm font-medium mb-1">{selectedTask.input}</h3>
+                <h3 className="text-sm font-medium mb-1">
+                  {selectedTask.input}
+                </h3>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   {selectedTask.task_type && (
-                    <span className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.06]">{selectedTask.task_type}</span>
+                    <span className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.06]">
+                      {selectedTask.task_type}
+                    </span>
                   )}
                   {selectedTask.total_duration && (
-                    <span>Duration: {selectedTask.total_duration.toFixed(1)}s</span>
+                    <span>
+                      Duration: {selectedTask.total_duration.toFixed(1)}s
+                    </span>
                   )}
-                  <span className={cn("font-medium", selectedTask.status === "completed" ? "text-emerald-400" : "text-red-400")}>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      selectedTask.status === "completed"
+                        ? "text-emerald-400"
+                        : "text-red-400",
+                    )}
+                  >
                     {selectedTask.status}
                   </span>
                 </div>
@@ -300,7 +415,11 @@ export default function ReplayPage() {
                     onClick={playing ? () => setPlaying(false) : handlePlay}
                     className="p-2.5 rounded-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white transition-all shadow-lg shadow-amber-600/20"
                   >
-                    {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {playing ? (
+                      <Pause className="w-4 h-4" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
                   </button>
                   <button
                     onClick={handleReset}
@@ -309,7 +428,11 @@ export default function ReplayPage() {
                     <RotateCcw className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1))}
+                    onClick={() =>
+                      setCurrentStep((prev) =>
+                        Math.min(prev + 1, steps.length - 1),
+                      )
+                    }
                     className="p-2.5 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-muted-foreground transition-colors"
                   >
                     <SkipForward className="w-4 h-4" />
@@ -317,7 +440,9 @@ export default function ReplayPage() {
 
                   {/* Speed control */}
                   <div className="flex items-center gap-2 ml-auto">
-                    <span className="text-[10px] text-muted-foreground">Speed:</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      Speed:
+                    </span>
                     {[0.5, 1, 2, 3].map((s) => (
                       <button
                         key={s}
@@ -339,12 +464,22 @@ export default function ReplayPage() {
                 <div className="h-2 w-full bg-white/[0.04] rounded-full overflow-hidden mb-2">
                   <div
                     className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-300"
-                    style={{ width: `${steps.length > 0 ? ((currentStep + 1) / steps.length) * 100 : 0}%` }}
+                    style={{
+                      width: `${steps.length > 0 ? ((currentStep + 1) / steps.length) * 100 : 0}%`,
+                    }}
                   />
                 </div>
                 <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                  <span>Step {Math.max(0, currentStep + 1)} of {steps.length}</span>
-                  <span>{playing ? "Playing..." : currentStep >= steps.length - 1 ? "Complete" : "Paused"}</span>
+                  <span>
+                    Step {Math.max(0, currentStep + 1)} of {steps.length}
+                  </span>
+                  <span>
+                    {playing
+                      ? "Playing..."
+                      : currentStep >= steps.length - 1
+                        ? "Complete"
+                        : "Paused"}
+                  </span>
                 </div>
               </div>
 
@@ -353,7 +488,9 @@ export default function ReplayPage() {
                 {steps.map((step, i) => {
                   const status = getStepStatus(i);
                   const StepIcon = AGENT_ICONS[step.agent] || Brain;
-                  const colors = AGENT_COLORS[step.agent] || "text-zinc-400 bg-zinc-500/10 border-zinc-500/30";
+                  const colors =
+                    AGENT_COLORS[step.agent] ||
+                    "text-zinc-400 bg-zinc-500/10 border-zinc-500/30";
 
                   return (
                     <motion.div
@@ -370,8 +507,8 @@ export default function ReplayPage() {
                         status === "running"
                           ? "border-amber-500/30 bg-amber-500/[0.06] shadow-lg shadow-amber-500/5"
                           : status === "completed"
-                          ? "border-emerald-500/20 bg-emerald-500/[0.03]"
-                          : "border-white/[0.06] bg-white/[0.02]",
+                            ? "border-emerald-500/20 bg-emerald-500/[0.03]"
+                            : "border-white/[0.06] bg-white/[0.02]",
                       )}
                     >
                       <div className="flex items-center gap-3">
@@ -386,16 +523,25 @@ export default function ReplayPage() {
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-medium", colors)}>
+                            <span
+                              className={cn(
+                                "inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-medium",
+                                colors,
+                              )}
+                            >
                               <StepIcon className="w-3 h-3" />
                               {step.label}
                             </span>
                             {step.duration && status === "completed" && (
-                              <span className="text-[10px] text-muted-foreground">{step.duration.toFixed(1)}s</span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {step.duration.toFixed(1)}s
+                              </span>
                             )}
                           </div>
                           {step.action && status !== "pending" && (
-                            <p className="text-xs text-muted-foreground mt-1">{step.action}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {step.action}
+                            </p>
                           )}
                         </div>
                       </div>
@@ -404,22 +550,68 @@ export default function ReplayPage() {
                 })}
               </div>
 
-              {/* Result (show when replay complete) */}
-              {currentStep >= steps.length - 1 && selectedTask.result_text && (
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] p-5"
-                >
-                  <h4 className="text-sm font-semibold text-emerald-400 mb-2 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Task Result
-                  </h4>
-                  <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">
-                    {selectedTask.result_text}
-                  </p>
-                </motion.div>
-              )}
+              {/* Result */}
+              {selectedTask.status !== "running" &&
+                (resultText || selectedTask.error_message) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={cn(
+                      "rounded-xl p-5",
+                      selectedTask.status === "completed"
+                        ? "border border-emerald-500/20 bg-emerald-500/[0.03]"
+                        : "border border-red-500/20 bg-red-500/[0.03]",
+                    )}
+                  >
+                    <h4
+                      className={cn(
+                        "text-sm font-semibold mb-2 flex items-center gap-2",
+                        selectedTask.status === "completed"
+                          ? "text-emerald-400"
+                          : "text-red-300",
+                      )}
+                    >
+                      {selectedTask.status === "completed" ? (
+                        <CheckCircle2 className="w-4 h-4" />
+                      ) : (
+                        <XCircle className="w-4 h-4" />
+                      )}
+                      {selectedTask.status === "completed"
+                        ? "Replay Output"
+                        : "Replay Error"}
+                    </h4>
+
+                    {resultText ? (
+                      <div className="rounded-lg border border-white/[0.08] bg-black/20 p-4 max-h-[320px] overflow-y-auto">
+                        <div className="prose prose-invert prose-sm max-w-none text-foreground/90">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {resultText}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {selectedTask.error_message ? (
+                      <p className="text-xs text-red-200/90 mt-3 whitespace-pre-wrap leading-relaxed">
+                        {selectedTask.error_message}
+                      </p>
+                    ) : null}
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-[11px] text-muted-foreground">
+                      <span>Status: {selectedTask.status}</span>
+                      <span>Steps: {steps.length}</span>
+                      <span>
+                        Duration:{" "}
+                        {selectedTask.total_duration
+                          ? `${selectedTask.total_duration.toFixed(2)}s`
+                          : "n/a"}
+                      </span>
+                      <span>
+                        Agents: {selectedTask.agent_path?.length || 0}
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
             </div>
           )}
         </div>

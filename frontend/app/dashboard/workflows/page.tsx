@@ -54,6 +54,13 @@ interface ExecLog {
 }
 
 const agentIcons: Record<string, typeof Brain> = {
+  planner: Brain,
+  web_search: Search,
+  data_extraction: Handshake,
+  reasoning: Brain,
+  comparison: Shield,
+  result_generator: Zap,
+  // Legacy aliases for older saved workflows
   supervisor: Brain,
   retrieval: Search,
   negotiation: Handshake,
@@ -568,8 +575,8 @@ export default function WorkflowsPage() {
         type: "builderNode",
         position: { x: 100, y: 200 },
         data: {
-          type: "supervisor",
-          label: "Supervisor",
+          type: "planner",
+          label: "Planner",
           status: "idle",
           config: { strategy: "sequential", maxRetries: 2, timeout: 60 },
         },
@@ -579,8 +586,8 @@ export default function WorkflowsPage() {
         type: "builderNode",
         position: { x: 400, y: 80 },
         data: {
-          type: "retrieval",
-          label: "Retrieval",
+          type: "web_search",
+          label: "Web Search",
           status: "idle",
           config: {
             topK: 10,
@@ -595,14 +602,12 @@ export default function WorkflowsPage() {
         type: "builderNode",
         position: { x: 400, y: 320 },
         data: {
-          type: "negotiation",
-          label: "Negotiation",
+          type: "data_extraction",
+          label: "Data Extraction",
           status: "idle",
           config: {
-            priceWeight: 0.5,
-            ratingWeight: 0.3,
-            deliveryWeight: 0.2,
-            maxRounds: 3,
+            format: "json",
+            maxItems: 20,
           },
         },
       },
@@ -611,10 +616,10 @@ export default function WorkflowsPage() {
         type: "builderNode",
         position: { x: 720, y: 200 },
         data: {
-          type: "compliance",
-          label: "Compliance",
+          type: "comparison",
+          label: "Comparison",
           status: "idle",
-          config: { strictMode: false, ruleSet: "default", budgetLimit: 50000 },
+          config: { criteria: "quality,cost,speed", rankingMethod: "weighted" },
         },
       },
       {
@@ -622,13 +627,12 @@ export default function WorkflowsPage() {
         type: "builderNode",
         position: { x: 1000, y: 200 },
         data: {
-          type: "executor",
-          label: "Executor",
+          type: "result_generator",
+          label: "Result Generator",
           status: "idle",
           config: {
-            executionMode: "confirm",
-            rollbackEnabled: true,
-            notifyOnComplete: true,
+            outputFormat: "detailed",
+            includeMetadata: true,
           },
         },
       },

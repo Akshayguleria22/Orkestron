@@ -66,7 +66,11 @@ QDRANT_HOST=localhost
 QDRANT_PORT=6333
 GROQ_API_KEY=your-groq-key
 JWT_SECRET=your-secret-key
+SERPER_API_KEY=your-serper-key
+SERPAPI_API_KEY=your-serpapi-key
 ```
+
+`SERPER_API_KEY` or `SERPAPI_API_KEY` is recommended for reliable web search in production.
 
 ### 5. Run the Server
 

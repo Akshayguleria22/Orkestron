@@ -7,8 +7,6 @@ import {
   Brain,
   Search,
   Handshake,
-  Shield,
-  Zap,
   Sliders,
   Lightbulb,
   BarChart3,
@@ -147,6 +145,17 @@ const nodeConfigs: Record<string, FieldConfig[]> = {
   ],
 };
 
+const TYPE_ALIASES: Record<string, string> = {
+  supervisor: "planner",
+  retrieval: "web_search",
+  negotiation: "data_extraction",
+  compliance: "comparison",
+  executor: "result_generator",
+};
+
+const resolveNodeType = (nodeType: string): string =>
+  TYPE_ALIASES[nodeType] || nodeType;
+
 const icons: Record<string, typeof Brain> = {
   planner: Brain,
   web_search: Search,
@@ -173,6 +182,8 @@ export function NodeConfigPanel({
   className,
 }: NodeConfigPanelProps) {
   const [localConfig, setLocalConfig] = useState<Record<string, unknown>>({});
+  const [customKey, setCustomKey] = useState("");
+  const [customValue, setCustomValue] = useState("");
 
   useEffect(() => {
     if (nodeData) {
@@ -182,8 +193,26 @@ export function NodeConfigPanel({
 
   if (!nodeId || !nodeData) return null;
 
-  const fields = nodeConfigs[nodeData.type] || [];
-  const Icon = icons[nodeData.type] || Sliders;
+  const resolvedType = resolveNodeType(nodeData.type);
+  const fields = nodeConfigs[resolvedType] || [];
+  const Icon = icons[resolvedType] || Sliders;
+  const iconColor = iconColors[resolvedType] || "text-zinc-400";
+
+  const customFields: FieldConfig[] = Object.keys(localConfig)
+    .filter((key) => !fields.some((f) => f.key === key))
+    .map(
+      (key): FieldConfig => ({
+        key,
+        label: key,
+        type:
+          typeof localConfig[key] === "boolean"
+            ? "boolean"
+            : typeof localConfig[key] === "number"
+              ? "number"
+              : "text",
+        description: "Custom parameter",
+      }),
+    );
 
   const handleChange = (key: string, value: unknown) => {
     const updated = { ...localConfig, [key]: value };
@@ -191,17 +220,51 @@ export function NodeConfigPanel({
     onUpdate(nodeId, updated);
   };
 
+  const parseCustomValue = (value: string): unknown => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    if (trimmed === "true") return true;
+    if (trimmed === "false") return false;
+    const asNum = Number(trimmed);
+    if (!Number.isNaN(asNum) && trimmed.match(/^-?\d+(\.\d+)?$/)) {
+      return asNum;
+    }
+    return trimmed;
+  };
+
+  const addCustomParam = () => {
+    const key = customKey.trim();
+    if (!key) return;
+    const updated = {
+      ...localConfig,
+      [key]: parseCustomValue(customValue),
+    };
+    setLocalConfig(updated);
+    onUpdate(nodeId, updated);
+    setCustomKey("");
+    setCustomValue("");
+  };
+
+  const removeCustomParam = (key: string) => {
+    const updated = { ...localConfig };
+    delete updated[key];
+    setLocalConfig(updated);
+    onUpdate(nodeId, updated);
+  };
+
+  const allFields = [...fields, ...customFields];
+
   return (
     <div
       className={cn(
         "flex flex-col border-l border-white/[0.06] bg-[#0B0F19]/80 backdrop-blur-sm w-[300px] shrink-0",
-        className
+        className,
       )}
     >
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Icon className={cn("w-4 h-4", iconColors[nodeData.type])} />
+          <Icon className={cn("w-4 h-4", iconColor)} />
           <p className="text-sm font-semibold text-white/80">
             {nodeData.label}
           </p>
@@ -220,13 +283,24 @@ export function NodeConfigPanel({
           Parameters
         </div>
 
-        {fields.map((field) => (
+        {allFields.length === 0 && (
+          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-xs text-muted-foreground">
+            No predefined parameters for this node type. Add custom parameters
+            below.
+          </div>
+        )}
+
+        {allFields.map((field) => (
           <div key={field.key} className="space-y-1.5">
             <label className="text-[12px] font-medium text-white/60 flex items-center justify-between">
               {field.label}
               {field.type === "slider" && (
                 <span className="text-[11px] text-indigo-400 font-mono tabular-nums">
-                  {((localConfig[field.key] as number) ?? field.min ?? 0).toFixed(2)}
+                  {(
+                    (localConfig[field.key] as number) ??
+                    field.min ??
+                    0
+                  ).toFixed(2)}
                 </span>
               )}
             </label>
@@ -237,7 +311,9 @@ export function NodeConfigPanel({
                 min={field.min}
                 max={field.max}
                 value={(localConfig[field.key] as number) ?? ""}
-                onChange={(e) => handleChange(field.key, parseFloat(e.target.value) || 0)}
+                onChange={(e) =>
+                  handleChange(field.key, parseFloat(e.target.value) || 0)
+                }
                 className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-sm text-white/90 focus:outline-none focus:border-indigo-500/40 transition-colors"
               />
             )}
@@ -253,7 +329,9 @@ export function NodeConfigPanel({
 
             {field.type === "select" && (
               <select
-                value={(localConfig[field.key] as string) ?? field.options?.[0] ?? ""}
+                value={
+                  (localConfig[field.key] as string) ?? field.options?.[0] ?? ""
+                }
                 onChange={(e) => handleChange(field.key, e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-[#111827] text-sm text-white/90 focus:outline-none focus:border-indigo-500/40 transition-colors cursor-pointer"
               >
@@ -272,7 +350,9 @@ export function NodeConfigPanel({
                 max={field.max ?? 1}
                 step={field.step ?? 0.01}
                 value={(localConfig[field.key] as number) ?? field.min ?? 0}
-                onChange={(e) => handleChange(field.key, parseFloat(e.target.value))}
+                onChange={(e) =>
+                  handleChange(field.key, parseFloat(e.target.value))
+                }
                 className="w-full h-1.5 rounded-full appearance-none bg-white/[0.08] accent-indigo-500 cursor-pointer [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-indigo-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#111827]"
               />
             )}
@@ -282,23 +362,61 @@ export function NodeConfigPanel({
                 onClick={() => handleChange(field.key, !localConfig[field.key])}
                 className={cn(
                   "relative w-10 h-5 rounded-full transition-colors duration-200",
-                  localConfig[field.key] ? "bg-indigo-500" : "bg-white/[0.1]"
+                  localConfig[field.key] ? "bg-indigo-500" : "bg-white/[0.1]",
                 )}
               >
                 <div
                   className={cn(
                     "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200",
-                    localConfig[field.key] ? "translate-x-5" : "translate-x-0.5"
+                    localConfig[field.key]
+                      ? "translate-x-5"
+                      : "translate-x-0.5",
                   )}
                 />
               </button>
             )}
 
             {field.description && (
-              <p className="text-[10px] text-white/25">{field.description}</p>
+              <p className="text-[10px] text-white/25 flex items-center justify-between gap-2">
+                <span>{field.description}</span>
+                {customFields.some((f) => f.key === field.key) && (
+                  <button
+                    onClick={() => removeCustomParam(field.key)}
+                    className="text-[10px] text-red-300/80 hover:text-red-200"
+                  >
+                    Remove
+                  </button>
+                )}
+              </p>
             )}
           </div>
         ))}
+
+        <div className="pt-2 border-t border-white/[0.06] space-y-2">
+          <p className="text-[10px] text-white/30 uppercase tracking-wider">
+            Add Custom Parameter
+          </p>
+          <input
+            type="text"
+            value={customKey}
+            onChange={(e) => setCustomKey(e.target.value)}
+            placeholder="key (e.g. max_tokens)"
+            className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-xs text-white/90 focus:outline-none focus:border-indigo-500/40"
+          />
+          <input
+            type="text"
+            value={customValue}
+            onChange={(e) => setCustomValue(e.target.value)}
+            placeholder="value (supports number/true/false/text)"
+            className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-xs text-white/90 focus:outline-none focus:border-indigo-500/40"
+          />
+          <button
+            onClick={addCustomParam}
+            className="w-full px-3 py-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-xs font-medium hover:bg-indigo-500/20 transition-colors"
+          >
+            Add Parameter
+          </button>
+        </div>
       </div>
 
       {/* Node ID footer */}

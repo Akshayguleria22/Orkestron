@@ -9,6 +9,7 @@ Production mode: authenticate → submit task → dynamic AI agent execution
 import asyncio
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
@@ -17,7 +18,7 @@ log = logging.getLogger(__name__)
 from fastapi import Depends, FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.audit.logger import log_action
 from app.auth.auth_service import AuthenticationError, create_user_token, verify_user_token, signup_user, login_user
@@ -31,7 +32,16 @@ from app.auth.refresh_tokens import (
 from app.cache.semantic_cache import check_cache, store_cache
 from app.identity.agent_registry import get_agent, list_agents, register_agent, register_default_agents
 from app.marketplace.vendor_registry import list_vendors
-from app.models.db import init_db, Task, AgentExecutionLog, ExecutionTrace, MarketplaceDeployedAgent, async_session
+from app.models.db import (
+    init_db,
+    Task,
+    AgentExecutionLog,
+    ExecutionTrace,
+    MarketplaceDeployedAgent,
+    ToolCallLog,
+    AgentRun,
+    async_session,
+)
 from app.outcomes.outcome_tracker import get_user_outcomes
 from app.billing.ledger import get_user_ledger
 from app.billing.invoice_service import generate_invoice, list_user_invoices, get_invoice_details
@@ -441,6 +451,32 @@ async def _update_task_status(task_id: str, status: str, error_message: Optional
         log.warning("Failed to update task %s status=%s: %s", task_id, status, exc)
 
 
+async def _delete_tasks_with_related_records(user_id: str, task_ids: List[str]) -> int:
+    """Delete tasks and their associated logs/traces for a specific user."""
+    if not task_ids:
+        return 0
+
+    async with async_session() as session:
+        await session.execute(
+            delete(AgentExecutionLog).where(AgentExecutionLog.task_id.in_(task_ids))
+        )
+        await session.execute(
+            delete(ToolCallLog).where(ToolCallLog.task_id.in_(task_ids))
+        )
+        await session.execute(
+            delete(ExecutionTrace).where(ExecutionTrace.task_id.in_(task_ids))
+        )
+        await session.execute(
+            delete(AgentRun).where(AgentRun.task_id.in_(task_ids))
+        )
+        await session.execute(
+            delete(Task).where(Task.user_id == user_id, Task.task_id.in_(task_ids))
+        )
+        await session.commit()
+
+    return len(task_ids)
+
+
 # ---------------------------------------------------------------------------
 # GET /tasks/real/{task_id} — get status and result of a real task
 # ---------------------------------------------------------------------------
@@ -491,6 +527,85 @@ async def list_real_tasks(
         ],
         "count": len(tasks),
     }
+
+
+# ---------------------------------------------------------------------------
+# DELETE /tasks/real/pending — remove stale pending/queued/planning tasks
+# ---------------------------------------------------------------------------
+@app.delete("/tasks/real/pending")
+async def cleanup_pending_tasks(
+    older_than_hours: int = Query(default=24, ge=1, le=24 * 30),
+    user=Depends(get_current_user),
+):
+    """Delete stale pending-like tasks for current user to keep history clean."""
+    user_id = user["sub"]
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
+    pending_like = ["pending", "queued", "planning"]
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(Task.task_id).where(
+                Task.user_id == user_id,
+                Task.status.in_(pending_like),
+                Task.created_at < cutoff,
+            )
+        )
+        task_ids = [row[0] for row in result.all()]
+
+    deleted = await _delete_tasks_with_related_records(user_id=user_id, task_ids=task_ids)
+    return {
+        "deleted": deleted,
+        "older_than_hours": older_than_hours,
+        "statuses": pending_like,
+    }
+
+
+# ---------------------------------------------------------------------------
+# DELETE /tasks/real — clear task history by status (default: completed,failed)
+# ---------------------------------------------------------------------------
+@app.delete("/tasks/real")
+async def clear_real_task_history(
+    status: str = Query(default="completed,failed"),
+    user=Depends(get_current_user),
+):
+    """Delete task history entries for current user by status list."""
+    user_id = user["sub"]
+    allowed = {"pending", "queued", "planning", "running", "completed", "failed"}
+    statuses = [s.strip().lower() for s in status.split(",") if s.strip()]
+    statuses = [s for s in statuses if s in allowed]
+
+    # Do not delete currently running tasks via bulk history cleanup.
+    statuses = [s for s in statuses if s != "running"]
+    if not statuses:
+        return {"deleted": 0, "statuses": []}
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(Task.task_id).where(
+                Task.user_id == user_id,
+                Task.status.in_(statuses),
+            )
+        )
+        task_ids = [row[0] for row in result.all()]
+
+    deleted = await _delete_tasks_with_related_records(user_id=user_id, task_ids=task_ids)
+    return {"deleted": deleted, "statuses": statuses}
+
+
+# ---------------------------------------------------------------------------
+# DELETE /tasks/real/{task_id} — remove a single task from history
+# ---------------------------------------------------------------------------
+@app.delete("/tasks/real/{task_id}")
+async def delete_real_task(task_id: str, user=Depends(get_current_user)):
+    """Delete one task (and related logs) from the current user's history."""
+    task = await _get_task_by_task_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.user_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    deleted = await _delete_tasks_with_related_records(user_id=user["sub"], task_ids=[task_id])
+    return {"deleted": deleted, "task_id": task_id}
 
 
 # ---------------------------------------------------------------------------

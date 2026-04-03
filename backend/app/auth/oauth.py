@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
 import httpx
+import jwt
+from jwt import ExpiredSignatureError, InvalidTokenError
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -45,6 +47,44 @@ class OAuthProvider:
 
 
 _providers: Dict[str, OAuthProvider] = {}
+_STATE_TTL_SECONDS = 600
+
+
+def _is_configured(value: str) -> bool:
+    """Treat empty and placeholder values as not configured."""
+    cleaned = (value or "").strip()
+    return bool(cleaned) and not cleaned.lower().startswith("placeholder_")
+
+
+def _create_oauth_state(provider_name: str, redirect_uri: str) -> str:
+    """Create a signed, short-lived state token to avoid in-memory state loss issues."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "provider": provider_name,
+        "redirect_uri": redirect_uri,
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(seconds=_STATE_TTL_SECONDS)).timestamp()),
+        "nonce": secrets.token_urlsafe(8),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def _decode_oauth_state(state: str) -> Dict[str, Any]:
+    """Decode and validate OAuth state token."""
+    try:
+        payload = jwt.decode(
+            state,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+        )
+    except ExpiredSignatureError as exc:
+        raise OAuthError("OAuth state expired") from exc
+    except InvalidTokenError as exc:
+        raise OAuthError("Invalid OAuth state") from exc
+
+    if not isinstance(payload, dict):
+        raise OAuthError("Invalid OAuth state payload")
+    return payload
 
 
 def _init_providers():
@@ -53,7 +93,7 @@ def _init_providers():
     if _providers:
         return
 
-    if settings.google_client_id:
+    if _is_configured(settings.google_client_id) and _is_configured(settings.google_client_secret):
         _providers["google"] = OAuthProvider(
             name="google",
             client_id=settings.google_client_id,
@@ -64,7 +104,7 @@ def _init_providers():
             scopes=["openid", "email", "profile"],
         )
 
-    if settings.github_client_id:
+    if _is_configured(settings.github_client_id) and _is_configured(settings.github_client_secret):
         _providers["github"] = OAuthProvider(
             name="github",
             client_id=settings.github_client_id,
@@ -97,14 +137,12 @@ def get_authorize_url(provider_name: str, redirect_uri: str) -> str:
     _init_providers()
     provider = _providers.get(provider_name)
     if not provider:
-        raise OAuthError(f"Unknown OAuth provider: {provider_name}")
+        raise OAuthError(
+            f"Unknown or unconfigured OAuth provider: {provider_name}. "
+            "Set provider client ID and client secret in backend/.env or project .env"
+        )
 
-    state = secrets.token_urlsafe(32)
-    _oauth_states[state] = {
-        "provider": provider_name,
-        "redirect_uri": redirect_uri,
-        "created_at": datetime.now(timezone.utc),
-    }
+    state = _create_oauth_state(provider_name, redirect_uri)
 
     params = {
         "client_id": provider.client_id,
@@ -118,8 +156,6 @@ def get_authorize_url(provider_name: str, redirect_uri: str) -> str:
         params["access_type"] = "offline"
         params["prompt"] = "consent"
 
-    qs = "&".join(f"{k}={httpx.URL('', params={k: v}).params}" for k, v in params.items())
-    # Build URL properly
     from urllib.parse import urlencode
     return f"{provider.authorize_url}?{urlencode(params)}"
 
@@ -140,19 +176,28 @@ async def handle_oauth_callback(
     _init_providers()
     provider = _providers.get(provider_name)
     if not provider:
-        raise OAuthError(f"Unknown OAuth provider: {provider_name}")
+        raise OAuthError(
+            f"Unknown or unconfigured OAuth provider: {provider_name}. "
+            "Set provider client ID and client secret in backend/.env or project .env"
+        )
 
-    # Validate state
+    redirect_uri = ""
+
+    # Backward compatibility for any old in-memory state still in flight.
     state_data = _oauth_states.pop(state, None)
-    if not state_data or state_data["provider"] != provider_name:
-        raise OAuthError("Invalid or expired OAuth state")
+    if state_data and state_data.get("provider") == provider_name:
+        age = (datetime.now(timezone.utc) - state_data["created_at"]).total_seconds()
+        if age > _STATE_TTL_SECONDS:
+            raise OAuthError("OAuth state expired")
+        redirect_uri = state_data.get("redirect_uri", "")
+    else:
+        payload = _decode_oauth_state(state)
+        if payload.get("provider") != provider_name:
+            raise OAuthError("OAuth state provider mismatch")
+        redirect_uri = str(payload.get("redirect_uri", "")).strip()
 
-    # Check state age (max 10 minutes)
-    age = (datetime.now(timezone.utc) - state_data["created_at"]).total_seconds()
-    if age > 600:
-        raise OAuthError("OAuth state expired")
-
-    redirect_uri = state_data["redirect_uri"]
+    if not redirect_uri or not redirect_uri.startswith(("http://", "https://")):
+        raise OAuthError("Invalid OAuth redirect URI")
 
     async with httpx.AsyncClient() as client:
         # Exchange code for provider access token
@@ -269,7 +314,7 @@ async def handle_oauth_callback(
 # ---------------------------------------------------------------------------
 
 def cleanup_stale_states():
-    """Remove OAuth states older than 10 minutes."""
+    """Remove legacy in-memory OAuth states older than 10 minutes."""
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
     stale = [k for k, v in _oauth_states.items() if v["created_at"] < cutoff]
     for k in stale:
