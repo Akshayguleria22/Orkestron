@@ -218,11 +218,14 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
-  submitRealTask: (token: string, input: string) =>
+  submitRealTask: (token: string, input: string, selectedSteps?: string[]) =>
     request<{ task_id: string; status: string }>("/tasks/real", {
       method: "POST",
       headers: authHeaders(token),
-      body: JSON.stringify({ input }),
+      body: JSON.stringify({
+        input,
+        selected_steps: selectedSteps && selectedSteps.length > 0 ? selectedSteps : undefined,
+      }),
     }),
 
   getRealTask: (token: string, taskId: string) =>
@@ -392,4 +395,25 @@ export const api = {
 
   getMLTools: () =>
     request<{ tools: Record<string, unknown>[]; count: number }>("/platform/ml-tools"),
+
+  // ─── Playground ───
+  runTool: (token: string, toolName: string, input: string) =>
+    request<{ tool: string; input: string; output: unknown; status: string }>("/tools/run", {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify({ tool_name: toolName, input }),
+    }),
+
+  getTaskHistory: async (token: string, limit = 50) => {
+    const data = await request<{ tasks: Record<string, unknown>[]; count: number }>(
+      `/tasks/real?limit=${limit}`,
+      {
+        headers: authHeaders(token),
+      }
+    );
+    return {
+      runs: data.tasks || [],
+      count: data.count ?? 0,
+    };
+  },
 };

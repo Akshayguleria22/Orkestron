@@ -16,8 +16,9 @@ import {
   ChevronLeft,
   FlaskConical,
   RotateCcw,
-  Settings,
+  LogOut,
   ListTodo,
+  User,
 } from "lucide-react";
 import { StatusBar } from "./status-bar";
 import { CommandCenter } from "@/components/command-center/command-center";
@@ -153,8 +154,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         {/* User + Collapse */}
         <div className="border-t border-white/[0.06]">
           {isAuthenticated && user && (
-            <div className="p-2">
-              <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-white/[0.04] transition-colors group">
+            <div className="p-2 space-y-1">
+              <Link
+                href="/dashboard/profile"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-white/[0.04] transition-colors group"
+              >
                 <div className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center shrink-0 text-[10px] font-bold text-violet-300">
                   {user.name?.[0]?.toUpperCase() || "U"}
                 </div>
@@ -166,19 +170,20 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                     </p>
                   </div>
                 )}
-                {!collapsed && (
-                  <button
-                    onClick={async () => {
-                      await logout();
-                      router.push("/login");
-                    }}
-                    className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors"
-                    title="Sign out"
-                  >
-                    <Settings className="w-3.5 h-3.5" />
-                  </button>
+              </Link>
+              <button
+                onClick={async () => {
+                  await logout();
+                  router.push("/login");
+                }}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-muted-foreground hover:text-red-400 hover:bg-red-500/[0.06] transition-colors w-full",
                 )}
-              </div>
+                title="Sign out"
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                {!collapsed && <span>Sign Out</span>}
+              </button>
             </div>
           )}
           <div className="p-2">

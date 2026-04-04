@@ -530,9 +530,19 @@ export default function TasksPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
-              Loading...
+            <div className="space-y-2 animate-pulse">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full bg-white/[0.05]" />
+                    <div className="h-4 flex-1 bg-white/[0.05] rounded" />
+                  </div>
+                  <div className="flex items-center gap-2 pl-6">
+                    <div className="h-3 w-16 bg-white/[0.03] rounded" />
+                    <div className="h-3 w-12 bg-white/[0.03] rounded" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : tasks.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm border border-white/[0.06] rounded-xl bg-white/[0.01]">

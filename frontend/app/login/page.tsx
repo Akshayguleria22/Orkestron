@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Github, ArrowRight, Loader2, UserPlus, LogIn } from "lucide-react";
@@ -17,6 +17,7 @@ export default function LoginPage() {
     isAuthenticated,
   } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,6 +26,15 @@ export default function LoginPage() {
   const [error, setError] = useState("");
 
   // Redirect if already authenticated
+  useEffect(() => {
+    const urlMode = searchParams.get("mode");
+    if (urlMode === "signup") {
+      setMode("signup");
+    } else if (urlMode === "login") {
+      setMode("login");
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     if (isAuthenticated) {
       router.replace("/dashboard");

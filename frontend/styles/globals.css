@@ -272,3 +272,12 @@
   animation: slide-up-fade 0.5s ease-out forwards;
 }
 
+/* Dark dropdown consistency */
+.themed-select {
+  color: hsl(var(--foreground));
+  background-color: rgba(255, 255, 255, 0.03);
+}
+.themed-select option {
+  background-color: #0b0f19;
+  color: hsl(var(--foreground));
+}

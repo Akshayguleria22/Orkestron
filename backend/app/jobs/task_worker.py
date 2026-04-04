@@ -13,19 +13,39 @@ from app.models.db import Task, async_session
 log = logging.getLogger(__name__)
 
 
-def run_real_task_job(task_id: str, user_id: str, task_input: str) -> Dict[str, Any]:
+def run_real_task_job(
+    task_id: str,
+    user_id: str,
+    task_input: str,
+    selected_steps: Optional[list[str]] = None,
+) -> Dict[str, Any]:
     """RQ entrypoint to execute a queued real task."""
     return asyncio.run(
-        _run_real_task_job_async(task_id=task_id, user_id=user_id, task_input=task_input)
+        _run_real_task_job_async(
+            task_id=task_id,
+            user_id=user_id,
+            task_input=task_input,
+            selected_steps=selected_steps,
+        )
     )
 
 
-async def _run_real_task_job_async(task_id: str, user_id: str, task_input: str) -> Dict[str, Any]:
+async def _run_real_task_job_async(
+    task_id: str,
+    user_id: str,
+    task_input: str,
+    selected_steps: Optional[list[str]] = None,
+) -> Dict[str, Any]:
     await _set_task_status(task_id=task_id, status="running")
     log.info("worker_task_start task_id=%s user_id=%s", task_id, user_id)
 
     try:
-        result = await execute_real_task(task_id=task_id, user_id=user_id, task_input=task_input)
+        result = await execute_real_task(
+            task_id=task_id,
+            user_id=user_id,
+            task_input=task_input,
+            selected_steps=selected_steps,
+        )
         log.info("worker_task_done task_id=%s status=completed", task_id)
         return {
             "task_id": task_id,

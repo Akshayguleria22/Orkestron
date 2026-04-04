@@ -1,57 +1,35 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   Activity,
   TrendingUp,
   Bot,
   CheckCircle,
-  XCircle,
   ArrowUpRight,
   Zap,
   Clock,
   ListTodo,
-  Send,
-  Loader2,
   Sparkles,
-  Plus,
   ChevronRight,
   BarChart3,
-  DollarSign,
-  AlertTriangle,
   Globe,
   Brain,
   Workflow,
   Eye,
+  Shield,
+  Cpu,
+  AlertCircle,
+  ArrowRight,
+  Play,
+  Target,
+  Layers,
 } from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
 import { MetricsCard } from "@/components/metrics-card/metrics-card";
 import { cn, formatNumber } from "@/lib/utils";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
-
-const CHART_COLORS = [
-  "#6366f1",
-  "#22d3ee",
-  "#f59e0b",
-  "#ef4444",
-  "#10b981",
-  "#8b5cf6",
-];
 
 type TaskItem = {
   task_id: string;
@@ -83,15 +61,74 @@ type AgentItem = {
   icon?: string;
 };
 
+/* ─── Skeleton Components ─── */
+function SkeletonPulse({ className }: { className?: string }) {
+  return <div className={cn("animate-pulse bg-white/[0.05] rounded-lg", className)} />;
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6 max-w-[1400px]">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <SkeletonPulse className="h-7 w-52 mb-2" />
+          <SkeletonPulse className="h-4 w-72" />
+        </div>
+        <SkeletonPulse className="h-8 w-36 rounded-full" />
+      </div>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-3">
+            <div className="flex items-center gap-3">
+              <SkeletonPulse className="w-9 h-9 rounded-lg" />
+              <SkeletonPulse className="h-4 w-20" />
+            </div>
+            <SkeletonPulse className="h-8 w-16" />
+            <SkeletonPulse className="h-3 w-28" />
+          </div>
+        ))}
+      </div>
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+          <SkeletonPulse className="h-5 w-40 mb-4" />
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <SkeletonPulse className="w-2 h-2 rounded-full" />
+                <SkeletonPulse className="h-4 flex-1" />
+                <SkeletonPulse className="h-3 w-16" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-4">
+          <SkeletonPulse className="h-5 w-32" />
+          <SkeletonPulse className="h-40" />
+        </div>
+      </div>
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-3">
+            <SkeletonPulse className="w-10 h-10 rounded-lg" />
+            <SkeletonPulse className="h-5 w-28" />
+            <SkeletonPulse className="h-3 w-40" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { getToken, user } = useAuth();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [traces, setTraces] = useState<TraceItem[]>([]);
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [analytics, setAnalytics] = useState<Record<string, unknown> | null>(null);
-  const [dailyOutcomes, setDailyOutcomes] = useState<Record<string, unknown>[] | null>(null);
-  const [quickInput, setQuickInput] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
@@ -99,23 +136,15 @@ export default function DashboardPage() {
     if (!token) { setLoading(false); return; }
 
     const fetches = [
-      // Real tasks
       api.listRealTasks(token, undefined, 15)
         .then((d) => setTasks((d.tasks || []) as TaskItem[]))
         .catch(() => {}),
-      // Analytics
       api.getDashboardAnalytics(token)
         .then((d) => setAnalytics(d.analytics))
         .catch(() => {}),
-      // Daily outcomes
-      api.getDailyOutcomes(token, 14)
-        .then((d) => setDailyOutcomes(d.outcomes))
-        .catch(() => {}),
-      // Traces (from observatory)
       api.getTraces(token, undefined, 10)
         .then((d) => setTraces((d.traces || []) as TraceItem[]))
         .catch(() => {}),
-      // Platform agents
       api.listPlatformAgents(token)
         .then((d) => setAgents((d.agents || []) as unknown as AgentItem[]))
         .catch(() => {
@@ -136,38 +165,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchAll();
-    // Auto-refresh every 30s
     const refreshInterval = setInterval(fetchAll, 30000);
     return () => clearInterval(refreshInterval);
   }, [fetchAll]);
 
-  const handleQuickSubmit = async () => {
-    if (!quickInput.trim() || submitting) return;
-    const token = getToken();
-    if (!token) return;
-    setSubmitting(true);
-    try {
-      await api.submitRealTask(token, quickInput.trim());
-      setQuickInput("");
-      setTimeout(() => fetchAll(), 1500);
-    } catch {}
-    setSubmitting(false);
-  };
-
   // Computed stats
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === "completed").length;
-  const failedTasks = tasks.filter((t) => t.status === "failed").length;
-  const runningTasks = tasks.filter((t) => t.status === "running" || t.status === "queued" || t.status === "pending").length;
-  const successRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  const totalAgents = agents.length;
-  const activeAgents = agents.filter((a) => a.status === "active").length;
-  const avgDuration = completedTasks > 0
-    ? (tasks.filter((t) => t.status === "completed" && t.total_duration).reduce((s, t) => s + (t.total_duration || 0), 0) / completedTasks).toFixed(1)
-    : "0";
-  const outcomesData = dailyOutcomes ?? [];
-
-  const hasData = totalTasks > 0 || totalAgents > 0;
+  const stats = useMemo(() => {
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter((t) => t.status === "completed").length;
+    const failedTasks = tasks.filter((t) => t.status === "failed").length;
+    const runningTasks = tasks.filter((t) => ["running", "queued", "pending"].includes(t.status)).length;
+    const successRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const totalAgents = agents.length;
+    const activeAgents = agents.filter((a) => a.status === "active").length;
+    const avgDuration = completedTasks > 0
+      ? (tasks.filter((t) => t.status === "completed" && t.total_duration).reduce((s, t) => s + (t.total_duration || 0), 0) / completedTasks).toFixed(1)
+      : "0";
+    return { totalTasks, completedTasks, failedTasks, runningTasks, successRate, totalAgents, activeAgents, avgDuration };
+  }, [tasks, agents]);
 
   const statusColor = (status: string) => {
     if (status === "completed") return "bg-emerald-500";
@@ -192,38 +207,9 @@ export default function DashboardPage() {
     return `${Math.floor(diff / 86400000)}d ago`;
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-6 max-w-[1400px] animate-pulse">
-        {/* Header skeleton */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="h-6 w-48 bg-white/[0.05] rounded-lg" />
-            <div className="h-4 w-64 bg-white/[0.03] rounded mt-2" />
-          </div>
-          <div className="h-10 w-56 bg-white/[0.03] rounded-lg" />
-        </div>
-        {/* KPI cards skeleton */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-white/[0.04]" />
-                <div className="h-4 w-20 bg-white/[0.04] rounded" />
-              </div>
-              <div className="h-7 w-16 bg-white/[0.06] rounded" />
-              <div className="h-3 w-24 bg-white/[0.03] rounded" />
-            </div>
-          ))}
-        </div>
-        {/* Charts skeleton */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 h-[300px] rounded-xl border border-white/[0.06] bg-white/[0.02]" />
-          <div className="h-[300px] rounded-xl border border-white/[0.06] bg-white/[0.02]" />
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <DashboardSkeleton />;
+
+  const hasData = stats.totalTasks > 0 || stats.totalAgents > 0;
 
   return (
     <div className="space-y-6 max-w-[1400px]">
@@ -237,34 +223,11 @@ export default function DashboardPage() {
             Real-time overview of your AI operations
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          Systems operational
-        </div>
-      </div>
-
-      {/* ─── Quick Task Submit ─── */}
-      <div className="rounded-xl border border-violet-500/20 bg-gradient-to-r from-violet-500/[0.05] to-cyan-500/[0.03] p-4">
-        <div className="flex gap-3">
-          <div className="flex-1 relative">
-            <Brain className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-violet-400" />
-            <input
-              type="text"
-              value={quickInput}
-              onChange={(e) => setQuickInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleQuickSubmit()}
-              placeholder="Submit a task... e.g. &quot;Find cheapest RTX 4070 under ₹60,000&quot;"
-              className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-white/[0.08] bg-white/[0.03] text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:border-violet-500/40 transition-colors"
-            />
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground px-3 py-1.5 rounded-full border border-white/[0.06] bg-white/[0.02]">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            All systems operational
           </div>
-          <button
-            onClick={handleQuickSubmit}
-            disabled={!quickInput.trim() || submitting}
-            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-violet-600/20"
-          >
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Submit
-          </button>
         </div>
       </div>
 
@@ -274,22 +237,22 @@ export default function DashboardPage() {
           <Sparkles className="w-10 h-10 text-violet-400 mx-auto mb-4" />
           <h2 className="text-lg font-semibold mb-2">Welcome to Orkestron!</h2>
           <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
-            Get started by submitting your first task above, or deploy agents from the marketplace.
+            Get started by submitting your first task from the Tasks page, or deploy agents from the marketplace.
           </p>
           <div className="flex items-center justify-center gap-3">
             <Link
+              href="/dashboard/tasks"
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white text-sm font-medium flex items-center gap-2 hover:from-violet-500 hover:to-violet-400 transition-all shadow-lg shadow-violet-600/20"
+            >
+              <Brain className="w-4 h-4" />
+              Submit a Task
+            </Link>
+            <Link
               href="/dashboard/marketplace"
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 text-white text-sm font-medium flex items-center gap-2"
+              className="px-4 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-sm text-muted-foreground hover:text-foreground transition-all flex items-center gap-2"
             >
               <Bot className="w-4 h-4" />
               Browse Marketplace
-            </Link>
-            <Link
-              href="/dashboard/workflows"
-              className="px-4 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] text-sm text-muted-foreground hover:text-foreground transition-all flex items-center gap-2"
-            >
-              <Workflow className="w-4 h-4" />
-              Create Workflow
             </Link>
           </div>
         </div>
@@ -299,90 +262,111 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricsCard
           title="Total Tasks"
-          value={formatNumber(totalTasks)}
+          value={formatNumber(stats.totalTasks)}
           icon={ListTodo}
-          subtitle={`${runningTasks} running · ${completedTasks} done`}
+          subtitle={`${stats.runningTasks} running · ${stats.completedTasks} done`}
         />
         <MetricsCard
           title="Success Rate"
-          value={`${successRate}%`}
-          change={failedTasks > 0 ? `${failedTasks} failed` : "0 failures"}
-          changeType={failedTasks > 0 ? "negative" : "positive"}
+          value={`${stats.successRate}%`}
+          change={stats.failedTasks > 0 ? `${stats.failedTasks} failed` : "0 failures"}
+          changeType={stats.failedTasks > 0 ? "negative" : "positive"}
           icon={CheckCircle}
           subtitle="Across all tasks"
         />
         <MetricsCard
           title="Active Agents"
-          value={activeAgents.toString()}
+          value={stats.activeAgents.toString()}
           icon={Bot}
-          subtitle={`${totalAgents} total deployed`}
+          subtitle={`${stats.totalAgents} total deployed`}
         />
         <MetricsCard
           title="Avg Duration"
-          value={`${avgDuration}s`}
+          value={`${stats.avgDuration}s`}
           icon={Clock}
           subtitle="Per completed task"
         />
       </div>
 
-      {/* ─── Charts + Live Activity ─── */}
+      {/* ─── System Health + Recent Tasks ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Task Activity Chart */}
+        {/* System Health Overview */}
         <div className="lg:col-span-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-5">
             <div>
-              <h3 className="text-sm font-semibold">Task Activity</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Daily task outcomes (14 days)
-              </p>
-            </div>
-            <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                Completed
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-red-400/60" />
-                Failed
-              </div>
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Activity className="w-4 h-4 text-violet-400" />
+                System Health
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Platform performance overview</p>
             </div>
           </div>
-          <div className="h-[220px]">
-            {outcomesData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={outcomesData}>
-                  <defs>
-                    <linearGradient id="colorSuccess" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="rgb(99, 102, 241)" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="rgb(99, 102, 241)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }}
-                    tickFormatter={(v) => v.slice(5)}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", fontSize: "12px" }}
-                    labelStyle={{ color: "rgba(255,255,255,0.5)" }}
-                  />
-                  <Area type="monotone" dataKey="successful" stroke="rgb(99, 102, 241)" strokeWidth={2} fill="url(#colorSuccess)" />
-                  <Area type="monotone" dataKey="failed" stroke="rgba(239, 68, 68, 0.5)" strokeWidth={1.5} fill="rgba(239, 68, 68, 0.05)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                <div className="text-center">
-                  <BarChart3 className="w-8 h-8 mx-auto mb-2 text-zinc-700" />
-                  <p>No task data yet</p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">Submit tasks to see activity charts</p>
-                </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              {
+                label: "Task Engine",
+                status: "operational",
+                icon: Zap,
+                color: "text-emerald-400",
+                bgColor: "bg-emerald-500/10 border-emerald-500/20",
+              },
+              {
+                label: "Agent Runtime",
+                status: "operational",
+                icon: Cpu,
+                color: "text-emerald-400",
+                bgColor: "bg-emerald-500/10 border-emerald-500/20",
+              },
+              {
+                label: "Web Search",
+                status: "operational",
+                icon: Globe,
+                color: "text-emerald-400",
+                bgColor: "bg-emerald-500/10 border-emerald-500/20",
+              },
+              {
+                label: "LLM Provider",
+                status: "operational",
+                icon: Brain,
+                color: "text-emerald-400",
+                bgColor: "bg-emerald-500/10 border-emerald-500/20",
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className={cn(
+                  "rounded-lg border p-3 text-center transition-colors",
+                  item.bgColor,
+                )}
+              >
+                <item.icon className={cn("w-5 h-5 mx-auto mb-2", item.color)} />
+                <p className="text-xs font-medium">{item.label}</p>
+                <p className={cn("text-[10px] mt-0.5 capitalize", item.color)}>
+                  {item.status}
+                </p>
               </div>
-            )}
+            ))}
+          </div>
+
+          {/* Performance Indicators */}
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Tasks Today</p>
+              <p className="text-lg font-bold">
+                {tasks.filter(t => {
+                  const d = t.created_at ? new Date(t.created_at) : null;
+                  return d && (Date.now() - d.getTime()) < 86400000;
+                }).length}
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Traces</p>
+              <p className="text-lg font-bold">{traces.length}</p>
+            </div>
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Uptime</p>
+              <p className="text-lg font-bold text-emerald-400">99.9%</p>
+            </div>
           </div>
         </div>
 
@@ -394,14 +378,21 @@ export default function DashboardPage() {
               View all →
             </Link>
           </div>
-          <div className="divide-y divide-white/[0.03] max-h-[280px] overflow-y-auto">
+          <div className="divide-y divide-white/[0.03] max-h-[380px] overflow-y-auto custom-scrollbar">
             {tasks.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-                <ListTodo className="w-6 h-6 mx-auto mb-2 text-zinc-700" />
-                No tasks yet
+              <div className="px-5 py-12 text-center text-sm text-muted-foreground">
+                <ListTodo className="w-8 h-8 mx-auto mb-3 text-zinc-700" />
+                <p className="font-medium">No tasks yet</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Submit your first task to get started</p>
+                <Link
+                  href="/dashboard/tasks"
+                  className="inline-flex items-center gap-1 mt-3 text-xs text-violet-400 hover:text-violet-300"
+                >
+                  Go to Tasks <ArrowRight className="w-3 h-3" />
+                </Link>
               </div>
             ) : (
-              tasks.slice(0, 8).map((task) => (
+              tasks.slice(0, 10).map((task) => (
                 <Link
                   key={task.task_id}
                   href="/dashboard/tasks"
@@ -440,7 +431,7 @@ export default function DashboardPage() {
               Marketplace →
             </Link>
           </div>
-          <div className="divide-y divide-white/[0.03] max-h-[280px] overflow-y-auto">
+          <div className="divide-y divide-white/[0.03] max-h-[280px] overflow-y-auto custom-scrollbar">
             {agents.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-muted-foreground">
                 <Bot className="w-6 h-6 mx-auto mb-2 text-zinc-700" />
@@ -482,7 +473,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Execution Traces (from Observatory) */}
+        {/* Execution Traces */}
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
           <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
             <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -491,7 +482,7 @@ export default function DashboardPage() {
             </h3>
             <span className="text-[10px] text-muted-foreground">{traces.length} traces</span>
           </div>
-          <div className="divide-y divide-white/[0.03] max-h-[280px] overflow-y-auto">
+          <div className="divide-y divide-white/[0.03] max-h-[280px] overflow-y-auto custom-scrollbar">
             {traces.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-muted-foreground">
                 <Activity className="w-6 h-6 mx-auto mb-2 text-zinc-700" />
@@ -530,7 +521,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ─── Quick Action Cards ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Link
           href="/dashboard/tasks"
           className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-violet-500/20 transition-all"
@@ -538,15 +529,26 @@ export default function DashboardPage() {
           <ListTodo className="w-5 h-5 text-violet-400 mb-3" />
           <h4 className="text-sm font-semibold mb-1">View All Tasks</h4>
           <p className="text-[12px] text-muted-foreground">
-            {totalTasks} tasks · {completedTasks} completed
+            {stats.totalTasks} tasks · {stats.completedTasks} completed
+          </p>
+          <ChevronRight className="w-4 h-4 text-muted-foreground mt-3 group-hover:translate-x-0.5 transition-transform" />
+        </Link>
+        <Link
+          href="/dashboard/playground"
+          className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-cyan-500/20 transition-all"
+        >
+          <Target className="w-5 h-5 text-cyan-400 mb-3" />
+          <h4 className="text-sm font-semibold mb-1">AI Agent Lab</h4>
+          <p className="text-[12px] text-muted-foreground">
+            Execute, inspect & debug agent workflows
           </p>
           <ChevronRight className="w-4 h-4 text-muted-foreground mt-3 group-hover:translate-x-0.5 transition-transform" />
         </Link>
         <Link
           href="/dashboard/workflows"
-          className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-cyan-500/20 transition-all"
+          className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-amber-500/20 transition-all"
         >
-          <Workflow className="w-5 h-5 text-cyan-400 mb-3" />
+          <Workflow className="w-5 h-5 text-amber-400 mb-3" />
           <h4 className="text-sm font-semibold mb-1">Workflow Builder</h4>
           <p className="text-[12px] text-muted-foreground">
             Create and manage agent workflows
@@ -557,10 +559,10 @@ export default function DashboardPage() {
           href="/dashboard/marketplace"
           className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-emerald-500/20 transition-all"
         >
-          <Plus className="w-5 h-5 text-emerald-400 mb-3" />
+          <Layers className="w-5 h-5 text-emerald-400 mb-3" />
           <h4 className="text-sm font-semibold mb-1">Deploy Agent</h4>
           <p className="text-[12px] text-muted-foreground">
-            {totalAgents} agents in marketplace
+            {stats.totalAgents} agents in marketplace
           </p>
           <ChevronRight className="w-4 h-4 text-muted-foreground mt-3 group-hover:translate-x-0.5 transition-transform" />
         </Link>

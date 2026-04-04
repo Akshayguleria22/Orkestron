@@ -2,6 +2,7 @@
 
 import logging
 import sys
+from typing import List, Optional
 
 from app.config import settings
 
@@ -65,7 +66,12 @@ def has_active_task_worker() -> bool:
     return False
 
 
-def enqueue_real_task_job(task_id: str, user_id: str, task_input: str) -> str:
+def enqueue_real_task_job(
+    task_id: str,
+    user_id: str,
+    task_input: str,
+    selected_steps: Optional[List[str]] = None,
+) -> str:
     """Enqueue a real task for worker-side execution and return queue job id."""
     if not has_active_task_worker():
         raise RuntimeError(f"No active RQ worker found for queue '{TASK_QUEUE_NAME}'")
@@ -76,6 +82,7 @@ def enqueue_real_task_job(task_id: str, user_id: str, task_input: str) -> str:
         task_id=task_id,
         user_id=user_id,
         task_input=task_input,
+        selected_steps=selected_steps,
         job_id=f"real-task-{task_id}",
         result_ttl=3600,
         failure_ttl=86400,

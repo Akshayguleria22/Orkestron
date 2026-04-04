@@ -1,8 +1,6 @@
 # ── Orkestron Production Stack ──
 # Full deployment with Nginx reverse proxy, backend, frontend, and all services.
 
-version: "3.9"
-
 services:
   # ─── Reverse Proxy ───
   nginx:
@@ -26,9 +24,15 @@ services:
       dockerfile: Dockerfile
     container_name: orkestron-api
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD}@postgres:5432/Orkestran
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: orkestron
       REDIS_URL: redis://redis:6379/0
-      QDRANT_URL: http://qdrant:6333
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      GROQ_API_KEY: ${GROQ_API_KEY}
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGINS: https://orkestron.yourdomain.com
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
@@ -52,9 +56,15 @@ services:
     container_name: orkestron-worker
     command: python -m app.jobs.worker
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD}@postgres:5432/Orkestran
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: orkestron
       REDIS_URL: redis://redis:6379/0
-      QDRANT_URL: http://qdrant:6333
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      GROQ_API_KEY: ${GROQ_API_KEY}
       JWT_SECRET: ${JWT_SECRET}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
@@ -88,7 +98,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: Orkestran
+      POSTGRES_DB: orkestron
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -101,7 +111,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: orkestron-redis
-    command: redis-server --requirepass ${REDIS_PASSWORD:-}
+    command: redis-server --appendonly yes
     volumes:
       - redisdata:/data
     healthcheck:

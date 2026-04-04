@@ -283,6 +283,7 @@ class LoginRequest(BaseModel):
 
 class RealTaskRequest(BaseModel):
     input: str
+    selected_steps: Optional[List[str]] = None
 
 
 async def get_current_developer(x_api_key: str = Header(default="")):
@@ -383,6 +384,22 @@ async def submit_real_task(req: RealTaskRequest, user=Depends(get_current_user))
     if not req.input or not req.input.strip():
         raise HTTPException(status_code=400, detail="Task input cannot be empty")
 
+    allowed_steps = {
+        "planner",
+        "web_search",
+        "data_extraction",
+        "reasoning",
+        "comparison",
+        "result_generator",
+    }
+    selected_steps: List[str] = []
+    for step in req.selected_steps or []:
+        step_name = str(step or "").strip().lower()
+        if step_name in allowed_steps and step_name not in selected_steps:
+            selected_steps.append(step_name)
+    if selected_steps and "planner" not in selected_steps:
+        selected_steps.insert(0, "planner")
+
     task_id = f"task-{uuid.uuid4().hex[:12]}"
 
     # Create task record
@@ -405,7 +422,12 @@ async def submit_real_task(req: RealTaskRequest, user=Depends(get_current_user))
 
     # Try Redis queue first, fall back to inline async execution
     try:
-        job_id = enqueue_real_task_job(task_id=task_id, user_id=user_id, task_input=req.input.strip())
+        job_id = enqueue_real_task_job(
+            task_id=task_id,
+            user_id=user_id,
+            task_input=req.input.strip(),
+            selected_steps=selected_steps or None,
+        )
         await _update_task_status(task_id=task_id, status="queued")
         queued_via_rq = True
     except Exception as exc:
@@ -416,7 +438,12 @@ async def submit_real_task(req: RealTaskRequest, user=Depends(get_current_user))
         async def _inline_execute():
             try:
                 await _update_task_status(task_id=task_id, status="running")
-                await execute_real_task(task_id=task_id, user_id=user_id, task_input=req.input.strip())
+                await execute_real_task(
+                    task_id=task_id,
+                    user_id=user_id,
+                    task_input=req.input.strip(),
+                    selected_steps=selected_steps or None,
+                )
             except Exception as inner_exc:
                 log.exception("Inline task execution failed for %s: %s", task_id, str(inner_exc))
                 await _update_task_failure(task_id=task_id, error_message=str(inner_exc)[:500])
@@ -427,6 +454,7 @@ async def submit_real_task(req: RealTaskRequest, user=Depends(get_current_user))
         "task_id": task_id,
         "job_id": job_id or f"inline-{task_id}",
         "status": "queued",
+        "selected_steps": selected_steps,
         "message": "Task queued. Poll GET /tasks/{task_id} or GET /tasks/real/{task_id} for status",
     }
 
@@ -1689,3 +1717,64 @@ async def list_ml_tools():
         for name, info in ML_TOOLS.items()
     ]
     return {"tools": tools, "count": len(tools)}
+
+
+# ===========================================================================
+# Playground — Tool Testing & Task History
+# ===========================================================================
+
+class ToolRunRequest(BaseModel):
+    tool_name: str
+    input: str
+
+
+@app.post("/tools/run")
+async def run_tool(req: ToolRunRequest, user=Depends(get_current_user)):
+    """Run a single tool directly (for Playground tool testing panel)."""
+    from app.agents.dynamic_orchestrator import _run_agent_step
+
+    tool_name = req.tool_name.strip()
+    tool_input = req.input.strip()
+
+    if not tool_name or not tool_input:
+        raise HTTPException(status_code=400, detail="Tool name and input are required")
+
+    valid_tools = ["web_search", "data_extraction", "reasoning", "comparison", "result_generator"]
+    if tool_name not in valid_tools:
+        raise HTTPException(status_code=400, detail=f"Invalid tool. Must be one of: {', '.join(valid_tools)}")
+
+    try:
+        result = await _run_agent_step(
+            agent_type=tool_name,
+            task_input=tool_input,
+            task_id=f"tool-test-{uuid.uuid4().hex[:8]}",
+            step_index=0,
+            key_queries=[tool_input[:120]],
+            intermediate_results={},
+        )
+        return {"tool": tool_name, "input": tool_input, "output": result, "status": "success"}
+    except Exception as exc:
+        log.error("Tool run failed for %s: %s", tool_name, exc)
+        return {"tool": tool_name, "input": tool_input, "output": str(exc)[:500], "status": "error"}
+
+
+@app.get("/tasks/history")
+async def get_task_history(
+    limit: int = 50,
+    user=Depends(get_current_user),
+):
+    """Get full task history for multi-run comparison in Playground."""
+    user_id = user["sub"]
+    async with async_session() as session:
+        result = await session.execute(
+            select(Task)
+            .where(Task.user_id == user_id)
+            .order_by(Task.created_at.desc())
+            .limit(min(limit, 100))
+        )
+        tasks = result.scalars().all()
+
+    return {
+        "runs": [_serialize_real_task(t) for t in tasks],
+        "count": len(tasks),
+    }

@@ -2,18 +2,18 @@
 
 import { motion } from "framer-motion";
 import { FlaskConical } from "lucide-react";
-import { TrainingPlayground } from "@/components/playground/training-playground";
+import { AIAgentLab } from "@/components/playground/training-playground";
 
 export default function PlaygroundPage() {
   return (
-    <div className="space-y-6 max-w-[1400px]">
+    <div className="space-y-4 max-w-[1600px]">
       <div>
         <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
           <FlaskConical className="w-5 h-5 text-violet-400" />
-          Training Playground
+          AI Agent Lab
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Sandbox environment to experiment with agent workflows — pick a scenario or write your own task
+          Live environment to submit tasks, observe AI agent execution, inspect steps, and test tools
         </p>
       </div>
 
@@ -22,7 +22,7 @@ export default function PlaygroundPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <TrainingPlayground />
+        <AIAgentLab />
       </motion.div>
     </div>
   );

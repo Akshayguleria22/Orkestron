@@ -47,6 +47,7 @@ async def execute_real_task(
     task_id: str,
     user_id: str,
     task_input: str,
+    selected_steps: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Main entry point for executing a real user task.
@@ -86,6 +87,12 @@ async def execute_real_task(
         # ── Step 1: Plan the task ──
         await _notify(user_id, task_id, "planning", "Analyzing your task...")
         plan = _normalize_plan(await plan_task(task_input, task_id), task_input)
+        if selected_steps:
+            plan = _apply_selected_steps_to_plan(
+                plan=plan,
+                selected_steps=selected_steps,
+                task_input=task_input,
+            )
         agent_path.append("planner")
 
         log.info(
@@ -490,6 +497,64 @@ def _normalize_plan(plan: Dict[str, Any], task_input: str) -> Dict[str, Any]:
         "requires_web": bool(plan.get("requires_web", True)),
         "key_queries": [str(q) for q in key_queries if str(q).strip()][:3] or [task_input[:120]],
     }
+
+
+def _apply_selected_steps_to_plan(
+    plan: Dict[str, Any],
+    selected_steps: List[str],
+    task_input: str,
+) -> Dict[str, Any]:
+    """Project planner output onto a user-selected step sequence."""
+    clean_selection: List[str] = []
+    for step in selected_steps:
+        step_name = str(step or "").strip().lower()
+        if not step_name or step_name == "planner":
+            continue
+        if step_name in AGENT_RUNNERS and step_name not in clean_selection:
+            clean_selection.append(step_name)
+
+    if not clean_selection:
+        return plan
+
+    base_steps = plan.get("steps", [])
+    existing_by_agent: Dict[str, Dict[str, Any]] = {
+        str(s.get("agent")): s
+        for s in base_steps
+        if isinstance(s, dict) and str(s.get("agent"))
+    }
+
+    filtered_steps: List[Dict[str, Any]] = []
+    for idx, agent in enumerate(clean_selection, start=1):
+        base = existing_by_agent.get(agent, {})
+        action = str(base.get("action") or _default_action_for_agent(agent, task_input))
+        filtered_steps.append(
+            {
+                "step": idx,
+                "agent": agent,
+                "action": action,
+                "depends_on": [idx - 1] if idx > 1 else [],
+            }
+        )
+
+    return {
+        **plan,
+        "summary": f"User-selected execution plan with {len(filtered_steps)} steps",
+        "steps": filtered_steps,
+    }
+
+
+def _default_action_for_agent(agent_type: str, task_input: str) -> str:
+    if agent_type == "web_search":
+        return f"Search for relevant information about: {task_input[:100]}"
+    if agent_type == "data_extraction":
+        return "Extract structured data from collected sources"
+    if agent_type == "reasoning":
+        return "Analyze collected evidence and derive conclusions"
+    if agent_type == "comparison":
+        return "Compare options and rank outcomes"
+    if agent_type == "result_generator":
+        return "Generate final structured response"
+    return f"Execute {agent_type} for this task"
 
 
 def _validate_agent_output(agent_type: str, output: Dict[str, Any]) -> tuple[bool, str]:

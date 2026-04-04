@@ -1,105 +1,123 @@
-# Orkestron — Autonomous Infrastructure Orchestrator
+# Orkestron
 
 [![CI](https://github.com/your-org/orkestron/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/orkestron/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Production-grade multi-agent AI orchestration platform with LangGraph workflows,
-vendor marketplace, outcome-based billing, and a third-party agent plugin ecosystem.
+Autonomous, production-oriented multi-agent orchestration platform built with FastAPI and Next.js.
 
----
+Orkestron executes natural-language tasks through coordinated AI agents (planning, retrieval, reasoning, comparison, synthesis), with observability, billing, and a plugin-capable marketplace architecture.
 
-## Architecture Summary
+## Table of Contents
+
+- [Why Orkestron](#why-orkestron)
+- [Core Capabilities](#core-capabilities)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Repository Structure](#repository-structure)
+- [Quick Start (Local)](#quick-start-local)
+- [Deploy Now (Production)](#deploy-now-production)
+- [API Quick Examples](#api-quick-examples)
+- [Testing](#testing)
+- [Observability](#observability)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Why Orkestron
+
+Orkestron is designed for teams that need:
+
+- Real multi-agent task execution (not mock chains)
+- Structured outcomes with traceable execution paths
+- Built-in auth, policy, and auditability
+- Operational visibility (Prometheus, Grafana, Loki)
+- Extensibility through agent registry and capability marketplace
+
+## Core Capabilities
+
+- Dynamic task planning and routing
+- Multi-step execution via specialized agents
+- Semantic caching via Redis
+- Vector memory with Qdrant
+- JWT auth + OAuth support
+- Outcome tracking, ledger, and invoice generation
+- Plugin/developer ecosystem with capability discovery
+- End-to-end observability and metrics
+
+## Architecture
 
 ```
 User
  ↓
-API Gateway (FastAPI)  ──►  Prometheus ──► Grafana Dashboards
+API Gateway (FastAPI)  -->  Prometheus --> Grafana
  ↓
-LangGraph Orchestrator
+LangGraph-style Dynamic Orchestrator
  ↓
-Worker Agents (Supervisor → Retrieval → Negotiation → Compliance → Executor)
- ↓                                ↓                    ↓
-Tools / Plugin System         VectorDB (Qdrant)    Redis Cache
+Planner -> Search -> Extraction -> Reasoning -> Comparison -> Result
  ↓
-Outcome Tracker ──► Billing Engine ──► Ledger
+Outcome Tracker --> Billing Engine --> Ledger/Invoices
  ↓
-PostgreSQL (Audit Logs + Data)
- ↓
-Loki (Structured Logs)
+PostgreSQL + Redis + Qdrant + Loki
 ```
 
-See [docs/architecture.md](docs/architecture.md) for detailed diagrams and component descriptions.
+Detailed architecture docs: [docs/architecture.md](docs/architecture.md)
 
----
+## Tech Stack
 
-## Feature List
+- Backend: FastAPI, SQLAlchemy (async), RQ workers
+- Frontend: Next.js 14, TypeScript, Tailwind CSS
+- Datastores: PostgreSQL, Redis, Qdrant
+- Monitoring: Prometheus, Grafana, Loki, Promtail
+- Infra: Docker Compose
 
-| Phase | Feature                          | Status |
-|-------|----------------------------------|--------|
-| 1     | Multi-agent routing              | ✅     |
-| 1     | Multi-tenant vector memory       | ✅     |
-| 1     | Semantic caching (Redis)         | ✅     |
-| 1     | Immutable audit logging          | ✅     |
-| 2     | LangGraph orchestration          | ✅     |
-| 2     | LLM intent classification        | ✅     |
-| 3     | JWT authentication               | ✅     |
-| 3     | Delegation tokens (OBO)          | ✅     |
-| 3     | Agent registry                   | ✅     |
-| 3     | Permission engine                | ✅     |
-| 4     | Vendor marketplace               | ✅     |
-| 4     | Negotiation engine               | ✅     |
-| 4     | Compliance agent                 | ✅     |
-| 4     | Outcome tracking                 | ✅     |
-| 5     | Outcome-based billing            | ✅     |
-| 5     | Invoice generation               | ✅     |
-| 6     | Agent capability marketplace     | ✅     |
-| 6     | Third-party plugin system        | ✅     |
-| 6     | Dynamic agent discovery          | ✅     |
-| 7     | Prometheus metrics               | ✅     |
-| 7     | Grafana dashboards               | ✅     |
-| 7     | Structured logging (Loki)        | ✅     |
-| 7     | CI/CD pipeline                   | ✅     |
-| 7     | Docker containerization          | ✅     |
-| 7     | Architecture documentation       | ✅     |
+## Repository Structure
 
----
+```
+Orkestron/
+|- backend/                 # FastAPI API, agents, auth, billing, worker
+|- frontend/                # Next.js dashboard and UX
+|- monitoring/              # Prometheus/Grafana/Loki/Promtail configs
+|- deploy/nginx/            # Nginx reverse proxy config
+|- docs/                    # Architecture and deployment docs
+|- docker-compose.yml       # Local infra + monitoring + worker
+|- docker-compose.prod.yml  # Full production-oriented stack
+`- README.md
+```
 
-## Installation Guide
+## Quick Start (Local)
 
 ### Prerequisites
 
-- **Docker & Docker Compose** — for infrastructure services
-- **Python 3.11+** — for the application
-- A **Groq API key** — for LLM intent classification ([console.groq.com](https://console.groq.com))
+- Docker + Docker Compose
+- Python 3.11+
+- Node.js 20+
+- Groq API key
 
-### 1. Clone the repository
+### 1. Clone and configure env
 
 ```bash
 git clone https://github.com/your-org/orkestron.git
-cd orkestron
-```
-
-### 2. Configure environment
-
-```bash
+cd Orkestron
 cp .env.example .env
-# Edit .env and set your GROQ_API_KEY
 ```
 
-### 3. Start infrastructure
+Set at least:
+
+- `GROQ_API_KEY`
+- `JWT_SECRET` (non-default)
+
+### 2. Start infrastructure
 
 ```bash
-# Core services (PostgreSQL on port 5433, Redis, Qdrant)
+# Core services
 docker compose up -d postgres redis qdrant
 
-# Full stack including monitoring (Prometheus, Grafana, Loki)
+# Optional: full local stack with monitoring + worker
 docker compose up -d
 ```
 
-> **Note:** PostgreSQL is mapped to port **5433** to avoid conflicts with local PostgreSQL installations.
-
-### 4. Install Python dependencies
-
-Use a single Python environment for this repo: `backend/.venv`.
+### 3. Start backend API
 
 ```bash
 cd backend
@@ -109,213 +127,176 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 
 # Linux/macOS
-source .venv/bin/activate
+# source .venv/bin/activate
 
 pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 5. Run the API server
+In another terminal (same virtualenv):
 
 ```bash
 cd backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# In another terminal (same virtualenv), run the queue worker
 python -m app.jobs.worker
 ```
 
-The API is now live at **http://localhost:8000**.
-
----
-
-## Running the System
-
-### Service Ports
-
-| Service    | Port  | URL                          |
-|------------|-------|------------------------------|
-| API        | 8000  | http://localhost:8000        |
-| PostgreSQL | 5433  | —                            |
-| Redis      | 6379  | —                            |
-| Qdrant     | 6333  | http://localhost:6333        |
-| Prometheus | 9090  | http://localhost:9090        |
-| Grafana    | 3000  | http://localhost:3000        |
-| Loki       | 3100  | http://localhost:3100        |
-
-**Grafana credentials:** `admin` / `orkestron`
-
-### Docker Build
+### 4. Start frontend
 
 ```bash
-docker build -t orkestron ./backend
-docker run -p 8000:8000 --env-file .env orkestron
+cd frontend
+npm install
+npm run dev
 ```
 
----
+Frontend: `http://localhost:3000`  
+Backend API: `http://localhost:8000`  
+API docs: `http://localhost:8000/docs`
 
-## API Endpoints
+## Deploy Now (Production)
 
-### Authentication
+If you want this online now, this is the fastest single-server path.
+
+### 1. Provision server
+
+- Ubuntu 22.04 LTS (or similar)
+- Open ports: `80`, `443`, `22`
+
+Install runtime:
 
 ```bash
-# Get a JWT token
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y docker.io docker-compose-plugin git
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+### 2. Clone repo and create production env file
+
+```bash
+git clone https://github.com/your-org/orkestron.git
+cd Orkestron
+cp .env.example .env.prod
+```
+
+Edit `.env.prod` and add/update:
+
+```env
+DB_PASSWORD=<strong-password>
+JWT_SECRET=<very-strong-secret>
+GRAFANA_PASSWORD=<grafana-admin-password>
+
+# Frontend public API base (important)
+API_URL=https://your-domain.com/api
+
+# Required for real AI execution
+GROQ_API_KEY=<your-groq-key>
+
+# Optional OAuth
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+```
+
+### 3. Configure domain and TLS
+
+Update server name in `deploy/nginx/orkestron.conf`.
+
+Put certs in:
+
+- `deploy/nginx/ssl/cert.pem`
+- `deploy/nginx/ssl/key.pem`
+
+### 4. Launch stack
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
+
+### 5. Verify deployment
+
+```bash
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f api
+curl -f https://your-domain.com/api/health
+```
+
+More deployment patterns (AWS/Vercel/ECS): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+
+## API Quick Examples
+
+### Get token
+
+```bash
 curl -X POST http://localhost:8000/auth/token \
   -H "Content-Type: application/json" \
-  -d '{"user_id": "user-1", "tenant_id": "tenant-acme"}'
+  -d '{"user_id":"user-1","tenant_id":"tenant-acme"}'
 ```
 
-### Task Orchestration
+### Submit task
 
 ```bash
-# Submit a task (async queue)
 curl -X POST http://localhost:8000/tasks/real \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"input": "buy 500 units of steel"}'
+  -d '{"input":"buy 500 units of steel"}'
+```
 
-# Poll task status/result
+### Poll task
+
+```bash
 curl -X GET http://localhost:8000/tasks/<task_id> \
   -H "Authorization: Bearer <token>"
 ```
-
-### Agent Marketplace
-
-```bash
-# Register a developer
-curl -X POST http://localhost:8000/developers/register \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Acme Dev", "email": "dev@acme.com"}'
-
-# Discover agents
-curl http://localhost:8000/agents/discover?capability=price_negotiation
-
-# List capabilities
-curl http://localhost:8000/agents/capabilities
-```
-
-### Billing
-
-```bash
-# View billing ledger
-curl http://localhost:8000/billing/ledger/user-1 \
-  -H "Authorization: Bearer <token>"
-
-# Generate invoice
-curl -X POST http://localhost:8000/billing/invoice/user-1 \
-  -H "Authorization: Bearer <token>"
-```
-
-### Monitoring
-
-```bash
-# Prometheus metrics
-curl http://localhost:8000/metrics
-
-# Health check
-curl http://localhost:8000/health
-```
-
----
-
-## Example Workflow
-
-```bash
-# 1. Get a token
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/token \
-  -H "Content-Type: application/json" \
-  -d '{"user_id":"user-1","tenant_id":"tenant-acme"}' | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
-
-# 2. Submit a purchase task
-TASK=$(curl -s -X POST http://localhost:8000/tasks/real \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"input":"buy 500 units of industrial steel"}')
-
-TASK_ID=$(echo "$TASK" | python -c "import sys,json;print(json.load(sys.stdin)['task_id'])")
-
-# 3. Poll async status
-curl -s -X GET "http://localhost:8000/tasks/$TASK_ID" \
-  -H "Authorization: Bearer $TOKEN" | python -m json.tool
-```
-
-Or run the demo script:
-
-```bash
-cd backend
-python scripts/demo_workflow.py
-```
-
----
-
-## Project Structure
-
-```
-orkestron/
-├── backend/                           # FastAPI backend
-│   ├── app/
-│   │   ├── main.py                    # FastAPI gateway (v0.8.0)
-│   │   ├── config.py                  # Environment configuration
-│   │   ├── agents/                    # AI agent modules
-│   │   ├── auth/                      # JWT + OAuth2 authentication
-│   │   ├── audit/                     # SHA-256 proof-of-action logger
-│   │   ├── billing/                   # Outcome-based billing engine
-│   │   ├── cache/                     # Redis semantic cache
-│   │   ├── developers/               # Third-party developer management
-│   │   ├── identity/                  # Agent identity registry
-│   │   ├── marketplace/              # Vendor marketplace + negotiation
-│   │   ├── memory/                    # Multi-tenant Qdrant memory
-│   │   ├── models/                    # SQLAlchemy ORM models
-│   │   ├── observability/            # Prometheus metrics + logging
-│   │   ├── outcomes/                  # Transaction outcome tracking
-│   │   ├── security/                  # Permission engine + rate limiter
-│   │   └── services/                  # Product, workflow, analytics services
-│   ├── tests/                         # Test suite
-│   ├── scripts/                       # Demo scripts
-│   ├── Dockerfile                     # Backend container
-│   └── requirements.txt              # Python dependencies
-├── frontend/                          # Next.js 14 dashboard
-├── monitoring/                        # Prometheus, Grafana, Loki configs
-├── deploy/nginx/                      # Nginx reverse proxy config
-├── docs/                              # Architecture documentation
-├── .github/workflows/                 # CI/CD pipeline
-├── docker-compose.yml                # Infrastructure services
-├── .env.example                       # Environment template
-└── README.md                          # This file
-```
-
----
 
 ## Testing
 
 ```bash
 cd backend
-
-# Install test dependencies
 pip install pytest pytest-asyncio httpx
-
-# Run all tests
 pytest tests/ -v
-
-# Run specific test module
-pytest tests/test_billing.py -v
 ```
 
----
+## Observability
 
-## Future Roadmap
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000` (local compose), admin/orkestron
+- Loki: `http://localhost:3100`
 
-- [ ] Kubernetes deployment manifests (Helm chart)
-- [ ] Real-time WebSocket task streaming
-- [ ] Agent-to-agent direct communication protocol
-- [ ] Multi-LLM provider support (OpenAI, Anthropic, local models)
-- [ ] SLA monitoring and alerting rules
-- [ ] Plugin marketplace web UI
-- [ ] A/B testing for agent routing strategies
-- [ ] Rate limiting and request throttling
-- [ ] Distributed tracing (OpenTelemetry)
-- [ ] Multi-region deployment support
+## Troubleshooting
 
----
+### Frontend webpack cache ENOENT in `.next/cache`
+
+```bash
+cd frontend
+rm -rf .next
+npm run dev
+```
+
+### Worker not processing tasks
+
+- Ensure Redis is up: `docker compose ps`
+- Ensure worker is running: `python -m app.jobs.worker`
+
+### API cannot connect to Postgres
+
+- Confirm Postgres is healthy and mapped to `5433` locally
+- Verify `.env` values match compose values
+
+## Roadmap
+
+- Kubernetes manifests and Helm chart
+- Real-time task streaming UX
+- Multi-LLM provider support
+- OpenTelemetry distributed tracing
+- Multi-region deployment support
+
+## Contributing
+
+1. Fork the repo
+2. Create a feature branch
+3. Add tests for your changes
+4. Open a PR with clear description
 
 ## License
 
