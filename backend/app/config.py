@@ -4,6 +4,7 @@ Single source of truth for connection strings and API keys.
 """
 
 from pathlib import Path
+from urllib.parse import urlencode
 
 from pydantic_settings import BaseSettings
 
@@ -35,19 +36,39 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "orkestron"
+    postgres_sslmode: str = ""
+    postgres_channel_binding: str = ""
+    database_url_override: str = ""
+    database_url_sync_override: str = ""
+
+    def _postgres_query_string(self) -> str:
+        params = {}
+        if self.postgres_sslmode:
+            params["sslmode"] = self.postgres_sslmode
+        if self.postgres_channel_binding:
+            params["channel_binding"] = self.postgres_channel_binding
+        if not params:
+            return ""
+        return f"?{urlencode(params)}"
 
     @property
     def database_url(self) -> str:
+        if self.database_url_override:
+            return self.database_url_override
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+            f"{self._postgres_query_string()}"
         )
 
     @property
     def database_url_sync(self) -> str:
+        if self.database_url_sync_override:
+            return self.database_url_sync_override
         return (
             f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+            f"{self._postgres_query_string()}"
         )
 
     # --- Redis ---
