@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 log = logging.getLogger(__name__)
 
@@ -189,9 +190,21 @@ app.add_middleware(RateLimitMiddleware)
 # ---------------------------------------------------------------------------
 # CORS — allow frontend origins (Must be added LAST to execute FIRST)
 # ---------------------------------------------------------------------------
+def _build_allowed_origins() -> List[str]:
+    origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    oauth_base = (settings.oauth_redirect_base or "").strip()
+    if oauth_base:
+        parsed = urlparse(oauth_base)
+        if parsed.scheme and parsed.netloc:
+            base_origin = f"{parsed.scheme}://{parsed.netloc}"
+            if base_origin not in origins:
+                origins.append(base_origin)
+    return origins
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins.split(","),
+    allow_origins=_build_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
