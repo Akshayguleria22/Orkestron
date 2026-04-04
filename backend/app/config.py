@@ -41,7 +41,19 @@ class Settings(BaseSettings):
     database_url_override: str = ""
     database_url_sync_override: str = ""
 
-    def _postgres_query_string(self) -> str:
+    def _postgres_query_string_async(self) -> str:
+        params = {}
+        if self.postgres_sslmode:
+            # asyncpg expects `ssl` (not `sslmode`).
+            if self.postgres_sslmode.lower() in {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}:
+                params["ssl"] = self.postgres_sslmode.lower()
+            else:
+                params["ssl"] = self.postgres_sslmode
+        if not params:
+            return ""
+        return f"?{urlencode(params)}"
+
+    def _postgres_query_string_sync(self) -> str:
         params = {}
         if self.postgres_sslmode:
             params["sslmode"] = self.postgres_sslmode
@@ -58,7 +70,7 @@ class Settings(BaseSettings):
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-            f"{self._postgres_query_string()}"
+            f"{self._postgres_query_string_async()}"
         )
 
     @property
@@ -68,7 +80,7 @@ class Settings(BaseSettings):
         return (
             f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-            f"{self._postgres_query_string()}"
+            f"{self._postgres_query_string_sync()}"
         )
 
     # --- Redis ---
