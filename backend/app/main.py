@@ -128,6 +128,18 @@ from app.tools.ml_tools import ML_TOOLS
 log = get_logger(__name__)
 
 
+async def _run_startup_step(name: str, step_coro):
+    """Run a startup coroutine with timeout and configurable strictness."""
+    timeout_seconds = max(1, int(settings.startup_step_timeout_seconds or 25))
+    try:
+        await asyncio.wait_for(step_coro, timeout=timeout_seconds)
+        log.info("startup_step_ok step=%s", name)
+    except Exception as exc:
+        log.exception("startup_step_failed step=%s error=%s", name, str(exc))
+        if settings.startup_strict:
+            raise
+
+
 async def _get_task_by_task_id(task_id: str) -> Optional[Task]:
     """Fetch a task row by its public task_id value."""
     async with async_session() as session:
@@ -163,12 +175,12 @@ def _serialize_real_task(task: Task) -> Dict[str, Any]:
 async def lifespan(app: FastAPI):
     setup_logging()
     log.info("Orkestron starting up")
-    await init_db()
-    await register_default_agents()
-    await seed_core_developer()
-    await seed_capabilities()
-    await seed_product_data()
-    await seed_deployable_agents()
+    await _run_startup_step("init_db", init_db())
+    await _run_startup_step("register_default_agents", register_default_agents())
+    await _run_startup_step("seed_core_developer", seed_core_developer())
+    await _run_startup_step("seed_capabilities", seed_capabilities())
+    await _run_startup_step("seed_product_data", seed_product_data())
+    await _run_startup_step("seed_deployable_agents", seed_deployable_agents())
     log.info("Orkestron ready")
     yield
     log.info("Orkestron shutting down")

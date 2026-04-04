@@ -121,6 +121,10 @@ class Settings(BaseSettings):
     # --- WebSocket ---
     ws_heartbeat_interval: int = 30
 
+    # --- Startup behavior ---
+    startup_step_timeout_seconds: int = 25
+    startup_strict: bool = False
+
     # --- Real Tool Layer ---
     serper_api_key: str = ""  # serper.dev for web search
     serpapi_api_key: str = ""  # serpapi.com alternative
