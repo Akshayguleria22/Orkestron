@@ -1,8 +1,5 @@
 # Orkestron
 
-[![CI](https://github.com/your-org/orkestron/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/orkestron/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
 Autonomous, production-oriented multi-agent orchestration platform built with FastAPI and Next.js.
 
 Orkestron executes natural-language tasks through coordinated AI agents (planning, retrieval, reasoning, comparison, synthesis), with observability, billing, and a plugin-capable marketplace architecture.
