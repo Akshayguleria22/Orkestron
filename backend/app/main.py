@@ -203,20 +203,25 @@ app.add_middleware(RateLimitMiddleware)
 # CORS — allow frontend origins (Must be added LAST to execute FIRST)
 # ---------------------------------------------------------------------------
 def _build_allowed_origins() -> List[str]:
-    origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    def _normalize_origin(value: str) -> str:
+        cleaned = value.strip()
+        return cleaned[:-1] if cleaned.endswith("/") else cleaned
+
+    origins = [_normalize_origin(o) for o in settings.cors_origins.split(",") if o.strip()]
     oauth_base = (settings.oauth_redirect_base or "").strip()
     if oauth_base:
         parsed = urlparse(oauth_base)
         if parsed.scheme and parsed.netloc:
-            base_origin = f"{parsed.scheme}://{parsed.netloc}"
+            base_origin = _normalize_origin(f"{parsed.scheme}://{parsed.netloc}")
             if base_origin not in origins:
                 origins.append(base_origin)
-    return origins
+    return list(dict.fromkeys(origins))
 
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_build_allowed_origins(),
+    allow_origin_regex=(settings.cors_origin_regex or None),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

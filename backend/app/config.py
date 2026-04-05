@@ -117,6 +117,7 @@ class Settings(BaseSettings):
 
     # --- CORS ---
     cors_origins: str = "http://localhost:3000,http://localhost:8000"
+    cors_origin_regex: str = ""
 
     # --- WebSocket ---
     ws_heartbeat_interval: int = 30
