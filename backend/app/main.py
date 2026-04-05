@@ -7,6 +7,7 @@ Production mode: authenticate → submit task → dynamic AI agent execution
 """
 
 import asyncio
+import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -202,12 +203,43 @@ app.add_middleware(RateLimitMiddleware)
 # ---------------------------------------------------------------------------
 # CORS — allow frontend origins (Must be added LAST to execute FIRST)
 # ---------------------------------------------------------------------------
-def _build_allowed_origins() -> List[str]:
-    def _normalize_origin(value: str) -> str:
-        cleaned = value.strip()
-        return cleaned[:-1] if cleaned.endswith("/") else cleaned
+def _normalize_origin(value: str) -> str:
+    cleaned = (value or "").strip().strip('"').strip("'")
+    return cleaned[:-1] if cleaned.endswith("/") else cleaned
 
-    origins = [_normalize_origin(o) for o in settings.cors_origins.split(",") if o.strip()]
+
+def _parse_cors_origins(raw: str) -> List[str]:
+    value = (raw or "").strip()
+    if not value:
+        return []
+
+    parsed: List[str] = []
+
+    # Accept JSON array format: ["https://a.com", "https://b.com"]
+    if value.startswith("["):
+        try:
+            loaded = json.loads(value)
+            if isinstance(loaded, list):
+                parsed.extend(str(item) for item in loaded if str(item).strip())
+        except Exception:
+            pass
+
+    # Accept comma/semicolon/newline separated values.
+    if not parsed:
+        normalized = value.replace(";", ",").replace("\n", ",")
+        parsed.extend(part for part in normalized.split(",") if part.strip())
+
+    origins: List[str] = []
+    for item in parsed:
+        origin = _normalize_origin(item)
+        if origin:
+            origins.append(origin)
+
+    return list(dict.fromkeys(origins))
+
+
+def _build_allowed_origins() -> List[str]:
+    origins = _parse_cors_origins(settings.cors_origins)
     oauth_base = (settings.oauth_redirect_base or "").strip()
     if oauth_base:
         parsed = urlparse(oauth_base)
@@ -218,10 +250,27 @@ def _build_allowed_origins() -> List[str]:
     return list(dict.fromkeys(origins))
 
 
+def _build_allowed_origin_regex(allowed_origins: List[str]) -> Optional[str]:
+    configured = (settings.cors_origin_regex or "").strip()
+    if configured:
+        return configured
+
+    # If a Vercel origin is explicitly configured, also allow preview URLs.
+    if any(origin.endswith(".vercel.app") for origin in allowed_origins):
+        return r"https://.*\.vercel\.app"
+
+    # Sensible default for this project family on Vercel (prod + preview URLs).
+    return r"https://orkestron.*\.vercel\.app"
+
+
+_ALLOWED_ORIGINS = _build_allowed_origins()
+_ALLOWED_ORIGIN_REGEX = _build_allowed_origin_regex(_ALLOWED_ORIGINS)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_build_allowed_origins(),
-    allow_origin_regex=(settings.cors_origin_regex or None),
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_origin_regex=_ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -990,6 +1039,11 @@ async def root_status():
         "service": "orkestron-api",
         "version": "0.8.0",
     }
+
+
+@app.head("/")
+async def root_status_head():
+    return Response(status_code=200)
 
 
 @app.get("/health")
