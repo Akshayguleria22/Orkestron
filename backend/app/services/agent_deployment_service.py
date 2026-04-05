@@ -235,6 +235,14 @@ async def execute_agent(
     if agent_data["visibility"] == "private" and agent_data["owner_id"] != user_id:
         return {"error": "Access denied — this is a private agent", "run_id": run_id, "status": "failed"}
 
+    agent_status = str(agent_data.get("status") or "active").lower()
+    if agent_status not in {"active", "idle"}:
+        return {
+            "error": f"Agent is in '{agent_status}' state and cannot execute",
+            "run_id": run_id,
+            "status": "failed",
+        }
+
     # Create run record
     run = AgentRun(
         run_id=run_id,
@@ -258,6 +266,7 @@ async def execute_agent(
     result_text = ""
     error_message = None
     final_result = {}
+    execution_warnings: List[str] = []
 
     try:
         agent_type = agent_data.get("agent_type", "llm")
@@ -295,6 +304,7 @@ async def execute_agent(
                         queue.append(neighbor)
 
             intermediate_results = {}
+            failed_nodes: List[str] = []
             for i, node_id in enumerate(order):
                 node_data = next((n for n in nodes if n["id"] == node_id), None)
                 if not node_data:
@@ -344,7 +354,18 @@ async def execute_agent(
                         "duration_ms": step_duration,
                         "error": str(exc)[:200],
                     })
-                    raise ValueError(f"Workflow execution failed at node {node_agent_type}: {str(exc)}")
+                    warning = f"Workflow node {node_agent_type} failed: {str(exc)[:200]}"
+                    failed_nodes.append(node_agent_type)
+                    execution_warnings.append(warning)
+                    await _notify_run(
+                        user_id,
+                        run_id,
+                        agent_id,
+                        "step_failed",
+                        warning,
+                        {"tool": node_agent_type, "duration_ms": step_duration},
+                    )
+                    continue
 
             # Set result_text based on execution graph
             result_gen = intermediate_results.get("result_generator")
@@ -354,6 +375,11 @@ async def execute_agent(
                 result_text = intermediate_results["reasoning"].get("analysis", "")
             else:
                 result_text = "Workflow executed successfully, but no direct text result was generated."
+
+            if failed_nodes:
+                final_result["workflow_failed_nodes"] = failed_nodes
+                if not result_text or "executed successfully" in result_text.lower():
+                    result_text = "Workflow executed with partial failures. Some nodes could not complete."
 
         else:
             # ── Step B: Standard ML/LLM pipeline ──
@@ -385,18 +411,41 @@ async def execute_agent(
 
             # ── Step B4: LLM reasoning (if agent uses LLM) ──
             if agent_type in ("llm", "hybrid"):
-                llm_result = await _run_llm_step(
-                    input_text, agent_data, final_result,
-                    user_id, run_id, agent_id, steps
-                )
+                try:
+                    llm_result = await _run_llm_step(
+                        input_text, agent_data, final_result,
+                        user_id, run_id, agent_id, steps
+                    )
+                except Exception as exc:
+                    llm_result = {
+                        "error": str(exc)[:300],
+                        "content": "",
+                        "tokens_used": 0,
+                    }
+                    execution_warnings.append(f"LLM step failed: {llm_result['error']}")
+                    steps.append(
+                        {
+                            "tool": "llm_analyze",
+                            "status": "failed",
+                            "duration_ms": 0,
+                            "error": llm_result["error"],
+                        }
+                    )
+
                 tools_used.append("llm_analyze")
                 total_tokens = llm_result.get("tokens_used", 0)
                 result_text = llm_result.get("content", "")
                 final_result["llm_response"] = result_text
 
+                if llm_result.get("error"):
+                    execution_warnings.append(f"LLM provider returned error: {llm_result['error']}")
+
         # ── Step 5: If ML-only agent, format ML results as text ──
         if agent_type == "ml" and not result_text:
             result_text = _format_ml_results(final_result.get("ml_analysis", {}), input_text)
+
+        if execution_warnings:
+            final_result["warnings"] = execution_warnings
 
         if not result_text:
             result_text = "Agent completed but produced no output. Try adjusting the input."
@@ -450,6 +499,7 @@ async def execute_agent(
             "ml_models_used": ml_models_used,
             "tokens_used": total_tokens,
             "total_duration": total_duration,
+            "warnings": execution_warnings,
         }
 
     except Exception as exc:
@@ -475,6 +525,7 @@ async def execute_agent(
             "error": error_message,
             "steps": steps,
             "total_duration": total_duration,
+            "warnings": execution_warnings,
         }
 
 

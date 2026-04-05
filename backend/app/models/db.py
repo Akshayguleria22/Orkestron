@@ -365,7 +365,7 @@ class Task(Base):
     user_id = Column(String(256), nullable=False, index=True)
     input_text = Column(Text, nullable=False)
     task_type = Column(String(64), nullable=True)  # search | analysis | comparison | research | execution
-    status = Column(String(32), nullable=False, default="pending")  # pending | queued | planning | running | completed | failed
+    status = Column(String(32), nullable=False, default="pending")  # pending | queued | planning | running | completed | failed | cancelled
     plan = Column(JSON, nullable=True)  # planner output: list of steps
     result = Column(JSON, nullable=True)  # structured final result
     result_text = Column(Text, nullable=True)  # human-readable summary

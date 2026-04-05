@@ -36,6 +36,14 @@ async def _run_real_task_job_async(
     task_input: str,
     selected_steps: Optional[list[str]] = None,
 ) -> Dict[str, Any]:
+    if await _is_task_cancelled(task_id=task_id):
+        log.info("worker_task_skipped_cancelled task_id=%s", task_id)
+        return {
+            "task_id": task_id,
+            "status": "cancelled",
+            "message": "Task was cancelled before execution",
+        }
+
     await _set_task_status(task_id=task_id, status="running")
     log.info("worker_task_start task_id=%s user_id=%s", task_id, user_id)
 
@@ -46,10 +54,11 @@ async def _run_real_task_job_async(
             task_input=task_input,
             selected_steps=selected_steps,
         )
-        log.info("worker_task_done task_id=%s status=completed", task_id)
+        final_status = str(result.get("status") or "completed")
+        log.info("worker_task_done task_id=%s status=%s", task_id, final_status)
         return {
             "task_id": task_id,
-            "status": "completed",
+            "status": final_status,
             "result_text_length": len(str(result.get("text", ""))),
         }
     except Exception as exc:
@@ -80,6 +89,8 @@ async def _set_task_status(
             task = result.scalar_one_or_none()
             if not task:
                 return
+            if task.status == "cancelled" and status != "cancelled":
+                return
             task.status = status
             if error_message:
                 task.error_message = error_message
@@ -93,3 +104,13 @@ async def _set_task_status(
             status,
             exc,
         )
+
+
+async def _is_task_cancelled(task_id: str) -> bool:
+    try:
+        async with async_session() as session:
+            result = await session.execute(select(Task.status).where(Task.task_id == task_id))
+            status = result.scalar_one_or_none()
+            return str(status or "").lower() == "cancelled"
+    except Exception:
+        return False

@@ -3,7 +3,14 @@
 export type AgentStatus = "active" | "idle" | "error" | "offline";
 export type WorkflowStatus = "running" | "completed" | "failed" | "pending";
 export type LogLevel = "info" | "warn" | "error" | "debug";
-export type RealTaskStatus = "pending" | "running" | "completed" | "failed";
+export type RealTaskStatus =
+  | "pending"
+  | "queued"
+  | "planning"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 // ── Real Task Types ──
 

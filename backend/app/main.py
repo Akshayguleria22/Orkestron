@@ -109,7 +109,7 @@ from app.services.analytics_service import (
     get_revenue_over_time,
     get_agent_usage,
 )
-from app.jobs.queue import enqueue_real_task_job
+from app.jobs.queue import enqueue_real_task_job, cancel_real_task_job
 
 # Phase 10 imports — Real Agent Marketplace
 from app.services.agent_deployment_service import (
@@ -316,6 +316,10 @@ class RealTaskRequest(BaseModel):
     selected_steps: Optional[List[str]] = None
 
 
+class TaskCancelRequest(BaseModel):
+    reason: Optional[str] = None
+
+
 async def get_current_developer(x_api_key: str = Header(default="")):
     """Verify developer API key from X-Api-Key header."""
     if not x_api_key:
@@ -501,7 +505,11 @@ async def _update_task_status(task_id: str, status: str, error_message: Optional
             result = await session.execute(select(Task).where(Task.task_id == task_id))
             task = result.scalar_one_or_none()
             if task:
+                if task.status == "cancelled" and status != "cancelled":
+                    return
                 task.status = status
+                if status in {"completed", "failed", "cancelled"}:
+                    task.completed_at = datetime.now(timezone.utc)
                 if error_message:
                     task.error_message = error_message[:500]
                 await session.commit()
@@ -588,6 +596,63 @@ async def list_real_tasks(
 
 
 # ---------------------------------------------------------------------------
+# POST /tasks/real/{task_id}/cancel — cancel a pending/running task
+# ---------------------------------------------------------------------------
+@app.post("/tasks/real/{task_id}/cancel")
+async def cancel_real_task(
+    task_id: str,
+    req: Optional[TaskCancelRequest] = None,
+    user=Depends(get_current_user),
+):
+    """Cancel a task in pending-like/running states."""
+    task = await _get_task_by_task_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.user_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    current_status = str(task.status or "").lower()
+    terminal_statuses = {"completed", "failed", "cancelled"}
+    if current_status in terminal_statuses:
+        return {
+            "task_id": task_id,
+            "status": current_status,
+            "cancelled": False,
+            "message": f"Task already {current_status}",
+        }
+
+    can_cancel_statuses = {"pending", "queued", "planning", "running"}
+    if current_status not in can_cancel_statuses:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Task in status '{current_status}' cannot be cancelled",
+        )
+
+    queue_cancelled = cancel_real_task_job(task_id=task_id)
+    reason = (req.reason or "").strip() if req else ""
+    cancel_message = reason[:500] if reason else "Cancelled by user"
+    await _update_task_status(task_id=task_id, status="cancelled", error_message=cancel_message)
+
+    await ws_manager.send_to_user(
+        user["sub"],
+        {
+            "type": "task_event",
+            "task_id": task_id,
+            "event": "cancelled",
+            "message": cancel_message,
+        },
+    )
+
+    return {
+        "task_id": task_id,
+        "status": "cancelled",
+        "cancelled": True,
+        "queue_cancelled": bool(queue_cancelled),
+        "message": cancel_message,
+    }
+
+
+# ---------------------------------------------------------------------------
 # DELETE /tasks/real/pending — remove stale pending/queued/planning tasks
 # ---------------------------------------------------------------------------
 @app.delete("/tasks/real/pending")
@@ -623,12 +688,12 @@ async def cleanup_pending_tasks(
 # ---------------------------------------------------------------------------
 @app.delete("/tasks/real")
 async def clear_real_task_history(
-    status: str = Query(default="completed,failed"),
+    status: str = Query(default="completed,failed,cancelled"),
     user=Depends(get_current_user),
 ):
     """Delete task history entries for current user by status list."""
     user_id = user["sub"]
-    allowed = {"pending", "queued", "planning", "running", "completed", "failed"}
+    allowed = {"pending", "queued", "planning", "running", "completed", "failed", "cancelled"}
     statuses = [s.strip().lower() for s in status.split(",") if s.strip()]
     statuses = [s for s in statuses if s in allowed]
 

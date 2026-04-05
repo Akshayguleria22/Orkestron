@@ -252,12 +252,16 @@ export default function MarketplacePage() {
 
       await fetchRuns(selectedAgent.agent_id);
       await fetchAgents();
-    } catch {
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : "Failed to execute agent. Check backend connection.";
       setCurrentRun({
         run_id: "error",
         agent_id: selectedAgent.agent_id,
         status: "failed",
-        result_text: "Failed to execute agent. Check backend connection.",
+        result_text: message,
         steps: [],
         tools_used: [],
         ml_models_used: [],
@@ -405,7 +409,10 @@ export default function MarketplacePage() {
           {loading ? (
             <div className="space-y-3 animate-pulse">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 flex items-start gap-3">
+                <div
+                  key={i}
+                  className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 flex items-start gap-3"
+                >
                   <div className="w-8 h-8 rounded-lg bg-white/[0.05] shrink-0" />
                   <div className="flex-1 space-y-2">
                     <div className="h-4 w-32 bg-white/[0.05] rounded" />
@@ -1073,7 +1080,7 @@ export default function MarketplacePage() {
                       }
                       placeholder="You are an expert AI assistant that..."
                       rows={3}
-                      className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-sm focus:outline-none focus:ring-1 focus:ring-violet-500/50 resize-none font-mono text-xs"
+                      className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] focus:outline-none focus:ring-1 focus:ring-violet-500/50 resize-none font-mono text-xs"
                     />
                   </div>
                 )}

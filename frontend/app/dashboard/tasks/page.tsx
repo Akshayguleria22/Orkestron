@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Trash2,
   ListTodo,
+  StopCircle,
   AlertTriangle,
   CircleDashed,
   ShieldAlert,
@@ -101,10 +102,20 @@ const AGENT_COLORS: Record<string, string> = {
   result_generator: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
 };
 
-const STATUS_CONFIG: Record<string, { icon: typeof Clock; color: string; label: string }> = {
+const STATUS_CONFIG: Record<
+  string,
+  { icon: typeof Clock; color: string; label: string }
+> = {
   pending: { icon: Clock, color: "text-zinc-400", label: "Pending" },
+  queued: { icon: CircleDashed, color: "text-indigo-300", label: "Queued" },
+  planning: { icon: Brain, color: "text-violet-300", label: "Planning" },
   running: { icon: Loader2, color: "text-cyan-400", label: "Running" },
-  completed: { icon: CheckCircle2, color: "text-emerald-400", label: "Completed" },
+  completed: {
+    icon: CheckCircle2,
+    color: "text-emerald-400",
+    label: "Completed",
+  },
+  cancelled: { icon: StopCircle, color: "text-amber-400", label: "Cancelled" },
   failed: { icon: XCircle, color: "text-red-400", label: "Failed" },
 };
 
@@ -113,6 +124,16 @@ const STATUS_BADGE: Record<StepStatus, string> = {
   running: "bg-cyan-500/10 border-cyan-500/30 text-cyan-300",
   completed: "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
   failed: "bg-red-500/10 border-red-500/30 text-red-300",
+};
+
+const TASK_STATUS_BADGE: Record<string, string> = {
+  pending: "bg-zinc-500/10 border-zinc-500/30 text-zinc-300",
+  queued: "bg-indigo-500/10 border-indigo-500/30 text-indigo-300",
+  planning: "bg-violet-500/10 border-violet-500/30 text-violet-300",
+  running: "bg-cyan-500/10 border-cyan-500/30 text-cyan-300",
+  completed: "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
+  failed: "bg-red-500/10 border-red-500/30 text-red-300",
+  cancelled: "bg-amber-500/10 border-amber-500/30 text-amber-300",
 };
 
 const EXAMPLE_TASKS = [
@@ -133,10 +154,17 @@ export default function TasksPage() {
   const [logsExpanded, setLogsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [cancellingTaskId, setCancellingTaskId] = useState<string | null>(null);
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({
     planner: true,
   });
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const isTerminalTaskStatus = (status: string) =>
+    ["completed", "failed", "cancelled"].includes(status.toLowerCase());
+
+  const canCancelTaskStatus = (status: string) =>
+    ["pending", "queued", "planning", "running"].includes(status.toLowerCase());
 
   const normalizeStatus = (status: string): StepStatus => {
     const s = status.toLowerCase();
@@ -381,6 +409,22 @@ export default function TasksPage() {
     }
   }, [token]);
 
+  const cancelTask = useCallback(
+    async (taskId: string) => {
+      if (!token || cancellingTaskId) return;
+      setCancellingTaskId(taskId);
+      try {
+        await api.cancelRealTask(token, taskId, "Cancelled by user");
+        await Promise.all([fetchTasks(), fetchTask(taskId), fetchLogs(taskId)]);
+      } catch {
+        // no-op
+      } finally {
+        setCancellingTaskId(null);
+      }
+    },
+    [token, cancellingTaskId, fetchTask, fetchTasks, fetchLogs],
+  );
+
   // Initial load
   useEffect(() => {
     fetchTasks().finally(() => setLoading(false));
@@ -389,12 +433,12 @@ export default function TasksPage() {
   // Poll selected task if it's in-progress
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
-    if (!selectedTask || selectedTask.status === "completed" || selectedTask.status === "failed") return;
+    if (!selectedTask || isTerminalTaskStatus(selectedTask.status)) return;
 
     pollRef.current = setInterval(async () => {
       const updated = await fetchTask(selectedTask.task_id);
       if (updated) fetchLogs(updated.task_id);
-      if (updated?.status === "completed" || updated?.status === "failed") {
+      if (updated?.status && isTerminalTaskStatus(updated.status)) {
         if (pollRef.current) clearInterval(pollRef.current);
       }
     }, 2000);
@@ -532,7 +576,10 @@ export default function TasksPage() {
           {loading ? (
             <div className="space-y-2 animate-pulse">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
+                <div
+                  key={i}
+                  className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 space-y-2"
+                >
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 rounded-full bg-white/[0.05]" />
                     <div className="h-4 flex-1 bg-white/[0.05] rounded" />
@@ -600,12 +647,12 @@ export default function TasksPage() {
                         onClick={() => deleteTaskFromHistory(task.task_id)}
                         disabled={
                           deletingTaskId === task.task_id ||
-                          task.status === "running"
+                          canCancelTaskStatus(task.status)
                         }
                         className="p-1.5 rounded-md border border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:text-red-300 hover:border-red-500/30 disabled:opacity-40"
                         title={
-                          task.status === "running"
-                            ? "Cannot remove running task"
+                          canCancelTaskStatus(task.status)
+                            ? "Stop task before removing"
                             : "Remove from history"
                         }
                       >
@@ -615,6 +662,21 @@ export default function TasksPage() {
                           <Trash2 className="w-3.5 h-3.5" />
                         )}
                       </button>
+
+                      {canCancelTaskStatus(task.status) && (
+                        <button
+                          onClick={() => cancelTask(task.task_id)}
+                          disabled={cancellingTaskId === task.task_id}
+                          className="p-1.5 rounded-md border border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:text-amber-300 hover:border-amber-500/30 disabled:opacity-40"
+                          title="Stop task"
+                        >
+                          {cancellingTaskId === task.task_id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <StopCircle className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -633,47 +695,63 @@ export default function TasksPage() {
             <div className="space-y-4">
               {/* Task Header */}
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-                <div className="flex items-start gap-3">
-                  {(() => {
-                    const sc = statusConfig(selectedTask.status);
-                    const Icon = sc.icon;
-                    return (
-                      <Icon
-                        className={cn(
-                          "w-5 h-5 mt-0.5 shrink-0",
-                          sc.color,
-                          selectedTask.status === "running" && "animate-spin",
-                        )}
-                      />
-                    );
-                  })()}
-                  <div className="flex-1">
-                    <p className="font-medium">{selectedTask.input}</p>
-                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                      <span
-                        className={cn(
-                          "px-2 py-0.5 rounded border text-[10px] font-medium",
-                          STATUS_BADGE[
-                            statusConfig(
-                              selectedTask.status,
-                            ).label.toLowerCase() as StepStatus
-                          ] || STATUS_BADGE.pending,
-                        )}
-                      >
-                        {statusConfig(selectedTask.status).label}
-                      </span>
-                      {selectedTask.task_type && (
-                        <span className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.06]">
-                          {selectedTask.task_type}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 flex-1">
+                    {(() => {
+                      const sc = statusConfig(selectedTask.status);
+                      const Icon = sc.icon;
+                      return (
+                        <Icon
+                          className={cn(
+                            "w-5 h-5 mt-0.5 shrink-0",
+                            sc.color,
+                            selectedTask.status === "running" && "animate-spin",
+                          )}
+                        />
+                      );
+                    })()}
+                    <div className="flex-1">
+                      <p className="font-medium">{selectedTask.input}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                        <span
+                          className={cn(
+                            "px-2 py-0.5 rounded border text-[10px] font-medium",
+                            TASK_STATUS_BADGE[
+                              selectedTask.status.toLowerCase()
+                            ] || STATUS_BADGE.pending,
+                          )}
+                        >
+                          {statusConfig(selectedTask.status).label}
                         </span>
-                      )}
-                      {selectedTask.total_duration && (
-                        <span>
-                          Completed in {selectedTask.total_duration.toFixed(1)}s
-                        </span>
-                      )}
+                        {selectedTask.task_type && (
+                          <span className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.06]">
+                            {selectedTask.task_type}
+                          </span>
+                        )}
+                        {selectedTask.total_duration && (
+                          <span>
+                            Completed in{" "}
+                            {selectedTask.total_duration.toFixed(1)}s
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
+
+                  {canCancelTaskStatus(selectedTask.status) && (
+                    <button
+                      onClick={() => cancelTask(selectedTask.task_id)}
+                      disabled={cancellingTaskId === selectedTask.task_id}
+                      className="px-3 py-2 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50 text-xs font-medium flex items-center gap-2"
+                    >
+                      {cancellingTaskId === selectedTask.task_id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <StopCircle className="w-3.5 h-3.5" />
+                      )}
+                      Stop task
+                    </button>
+                  )}
                 </div>
 
                 <div className="mt-4">
@@ -1035,8 +1113,21 @@ export default function TasksPage() {
                   </div>
                 )}
 
+              {selectedTask.status === "cancelled" && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.03] p-5">
+                  <h3 className="text-sm font-semibold text-amber-300 mb-2 flex items-center gap-2">
+                    <StopCircle className="w-4 h-4" />
+                    Task Cancelled
+                  </h3>
+                  <p className="text-sm text-amber-100/90">
+                    {selectedTask.error_message ||
+                      "Execution was stopped by user."}
+                  </p>
+                </div>
+              )}
+
               {/* In-progress indicator */}
-              {selectedTask.status === "running" && (
+              {canCancelTaskStatus(selectedTask.status) && (
                 <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.03] p-5 flex items-center gap-3">
                   <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
                   <div>

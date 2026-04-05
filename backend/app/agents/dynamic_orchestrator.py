@@ -43,6 +43,10 @@ AGENT_RUNNERS = {
 MAX_AGENT_ATTEMPTS = 2  # one retry after first failure
 
 
+class TaskCancelledError(Exception):
+    """Raised when a task is cancelled by the user during execution."""
+
+
 async def execute_real_task(
     task_id: str,
     user_id: str,
@@ -84,6 +88,8 @@ async def execute_real_task(
         log.warning("Failed to create execution trace for task %s", task_id)
 
     try:
+        await _ensure_not_cancelled(task_id)
+
         # ── Step 1: Plan the task ──
         await _notify(user_id, task_id, "planning", "Analyzing your task...")
         plan = _normalize_plan(await plan_task(task_input, task_id), task_input)
@@ -113,6 +119,8 @@ async def execute_real_task(
 
         # ── Step 2: Execute each step ──
         for i, step in enumerate(steps):
+            await _ensure_not_cancelled(task_id)
+
             agent_type = step.get("agent", "")
             step_action = step.get("action", "")
             step_index = step.get("step", i + 1)
@@ -204,6 +212,8 @@ async def execute_real_task(
                 # Continue to next step (graceful degradation)
 
         # ── Step 3: Build final result ──
+        await _ensure_not_cancelled(task_id)
+
         total_duration = time.perf_counter() - start
 
         # Get the final result text
@@ -294,6 +304,35 @@ async def execute_real_task(
                  task_id, plan.get("task_type"), total_duration, len(agent_path))
 
         return final_result
+
+    except TaskCancelledError:
+        total_duration = time.perf_counter() - start
+        cancelled_message = "Task cancelled by user"
+
+        await _update_task(
+            task_id,
+            status="cancelled",
+            result={
+                "text": cancelled_message,
+                "task_type": "cancelled",
+                "agent_path": agent_path,
+                "duration_seconds": round(total_duration, 2),
+            },
+            result_text=cancelled_message,
+            agent_path=agent_path,
+            total_duration=round(total_duration, 2),
+            error_message=cancelled_message,
+        )
+        await _update_trace(trace_id, "cancelled", trace_nodes, round(total_duration, 2))
+        await _notify(user_id, task_id, "cancelled", cancelled_message)
+
+        return {
+            "text": cancelled_message,
+            "task_type": "cancelled",
+            "status": "cancelled",
+            "agent_path": agent_path,
+            "duration_seconds": round(total_duration, 2),
+        }
 
     except Exception as exc:
         total_duration = time.perf_counter() - start
@@ -665,6 +704,9 @@ async def _update_task(task_id: str, **kwargs) -> None:
             result = await session.execute(select(Task).where(Task.task_id == task_id))
             task = result.scalar_one_or_none()
             if task:
+                incoming_status = kwargs.get("status")
+                if task.status == "cancelled" and incoming_status != "cancelled":
+                    return
                 for key, value in kwargs.items():
                     if key == "result" and isinstance(value, dict):
                         task.result = value
@@ -677,6 +719,21 @@ async def _update_task(task_id: str, **kwargs) -> None:
                 await session.commit()
     except Exception as exc:
         log.warning("Failed to update task %s: %s", task_id, exc)
+
+
+async def _is_task_cancelled(task_id: str) -> bool:
+    try:
+        async with async_session() as session:
+            result = await session.execute(select(Task.status).where(Task.task_id == task_id))
+            status = result.scalar_one_or_none()
+            return str(status or "").lower() == "cancelled"
+    except Exception:
+        return False
+
+
+async def _ensure_not_cancelled(task_id: str) -> None:
+    if await _is_task_cancelled(task_id):
+        raise TaskCancelledError("Task cancelled by user")
 
 
 async def _update_trace(trace_id: str, status: str, nodes: List[Dict], total_duration: float) -> None:

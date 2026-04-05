@@ -88,3 +88,25 @@ def enqueue_real_task_job(
         failure_ttl=86400,
     )
     return job.id
+
+
+def cancel_real_task_job(task_id: str) -> bool:
+    """Best-effort cancel of a queued/started real-task RQ job."""
+    job_id = f"real-task-{task_id}"
+    try:
+        from rq.job import Job
+
+        job = Job.fetch(job_id, connection=get_redis_connection())
+        if not job:
+            return False
+
+        try:
+            job.cancel()
+        except Exception:
+            # Some RQ states may not support cancel; treat as best-effort.
+            pass
+
+        return True
+    except Exception as exc:
+        log.warning("Failed to cancel RQ job %s: %s", job_id, exc)
+        return False

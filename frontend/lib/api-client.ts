@@ -13,6 +13,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     },
   });
   if (!res.ok) {
+    let serverDetail = "";
+    try {
+      const body = await res.json();
+      if (body && typeof body === "object") {
+        const maybeDetail = (body as Record<string, unknown>).detail;
+        const maybeError = (body as Record<string, unknown>).error;
+        const maybeMessage = (body as Record<string, unknown>).message;
+        serverDetail = String(maybeDetail || maybeError || maybeMessage || "").trim();
+      }
+    } catch {
+      serverDetail = "";
+    }
+
     if (res.status === 401) {
       // Dispatch an event to log the user out on the frontend
       if (typeof window !== "undefined") {
@@ -21,10 +34,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       throw new Error("Unauthorized");
     }
     if (res.status === 429) {
-      const data = await res.json();
-      throw new Error(`Rate limited. Retry after ${data.retry_after}s`);
+      if (serverDetail) {
+        throw new Error(serverDetail);
+      }
+      throw new Error("Rate limited. Retry later.");
     }
-    throw new Error(`API ${res.status}: ${res.statusText}`);
+    const suffix = serverDetail ? ` - ${serverDetail}` : "";
+    throw new Error(`API ${res.status}: ${res.statusText}${suffix}`);
   }
   return res.json();
 }
@@ -248,7 +264,17 @@ export const api = {
       headers: authHeaders(token),
     }),
 
-  clearTaskHistory: (token: string, status = "completed,failed") =>
+  cancelRealTask: (token: string, taskId: string, reason?: string) =>
+    request<{ task_id: string; status: string; cancelled: boolean; message: string }>(
+      `/tasks/real/${taskId}/cancel`,
+      {
+        method: "POST",
+        headers: authHeaders(token),
+        body: JSON.stringify({ reason }),
+      }
+    ),
+
+  clearTaskHistory: (token: string, status = "completed,failed,cancelled") =>
     request<{ deleted: number; statuses: string[] }>(
       `/tasks/real?status=${encodeURIComponent(status)}`,
       {
