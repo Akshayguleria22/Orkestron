@@ -13,17 +13,18 @@ Storage layout in Redis (per entry):
 
 import json
 import uuid
-from typing import Optional
+from typing import Optional, TYPE_CHECKING, Any
 
 import numpy as np
 import redis
 
-from sentence_transformers import SentenceTransformer
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 from app.config import settings
 
 _redis: redis.Redis | None = None
-_embedder: SentenceTransformer | None = None
+_embedder: Any = None
 
 CACHE_KEYS_SET = "cache:keys"
 
@@ -35,9 +36,10 @@ def _get_redis() -> redis.Redis:
     return _redis
 
 
-def _get_embedder() -> SentenceTransformer:
+def _get_embedder():
     global _embedder
     if _embedder is None:
+        from sentence_transformers import SentenceTransformer
         _embedder = SentenceTransformer(settings.embedding_model)
     return _embedder
 

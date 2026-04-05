@@ -6,7 +6,7 @@ Searches are always filtered to the requesting tenant — hard tenant isolation.
 """
 
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict, Any, TYPE_CHECKING
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -17,7 +17,9 @@ from qdrant_client.models import (
     PointStruct,
     VectorParams,
 )
-from sentence_transformers import SentenceTransformer
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 from app.config import settings
 
@@ -25,7 +27,7 @@ COLLECTION_NAME = "orkestron_memory"
 
 # Lazy singletons — initialised on first call
 _client: QdrantClient | None = None
-_embedder: SentenceTransformer | None = None
+_embedder = None
 
 
 def _get_client() -> QdrantClient:
@@ -41,9 +43,10 @@ def _get_client() -> QdrantClient:
     return _client
 
 
-def _get_embedder() -> SentenceTransformer:
+def _get_embedder():
     global _embedder
     if _embedder is None:
+        from sentence_transformers import SentenceTransformer
         _embedder = SentenceTransformer(settings.embedding_model)
     return _embedder
 
