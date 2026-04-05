@@ -918,6 +918,15 @@ async def metrics_endpoint():
 # ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
+@app.get("/")
+async def root_status():
+    return {
+        "status": "ok",
+        "service": "orkestron-api",
+        "version": "0.8.0",
+    }
+
+
 @app.get("/health")
 async def health():
     return {
