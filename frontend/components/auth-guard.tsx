@@ -1,19 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Brain, Loader2 } from "lucide-react";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace("/login");
-    }
-  }, [isLoading, isAuthenticated, router]);
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -25,10 +16,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         <p className="text-xs text-muted-foreground">Loading Orkestron...</p>
       </div>
     );
-  }
-
-  if (!isAuthenticated) {
-    return null;
   }
 
   return <>{children}</>;

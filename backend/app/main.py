@@ -295,19 +295,33 @@ async def metrics_middleware(request: Request, call_next):
 # ---------------------------------------------------------------------------
 # Auth dependency
 # ---------------------------------------------------------------------------
-async def get_current_user(authorization: str = Header(default="")):
-    """Extract and verify JWT from Authorization header."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
+async def get_current_user(
+    authorization: str = Header(default=""),
+    x_guest_id: str = Header(default=""),
+):
+    """Extract user identity from Bearer token or guest header."""
+    if authorization:
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token:
+            raise HTTPException(status_code=401, detail="Invalid Authorization header format")
+        try:
+            return verify_user_token(token)
+        except AuthenticationError as exc:
+            raise HTTPException(status_code=401, detail=str(exc))
 
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token:
-        raise HTTPException(status_code=401, detail="Invalid Authorization header format")
+    guest_id = (x_guest_id or "").strip()
+    if not guest_id:
+        raise HTTPException(status_code=401, detail="Missing X-Guest-Id header")
+    if len(guest_id) > 128:
+        raise HTTPException(status_code=400, detail="Guest id too long")
 
-    try:
-        return verify_user_token(token)
-    except AuthenticationError as exc:
-        raise HTTPException(status_code=401, detail=str(exc))
+    return {
+        "sub": guest_id,
+        "tenant_id": "guest",
+        "roles": ["guest"],
+        "permissions": ["submit_task", "view_workflows", "view_billing"],
+        "auth_type": "guest",
+    }
 
 
 # ---------------------------------------------------------------------------

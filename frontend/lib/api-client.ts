@@ -2,16 +2,48 @@
 // Full API wrapper for backend — auth, workflows, products, analytics, WebSocket.
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const GUEST_STORAGE_KEY = "orkestron_guest_id";
+
+function getGuestId(): string {
+  if (typeof window === "undefined") return "";
+  const stored = localStorage.getItem(GUEST_STORAGE_KEY);
+  if (stored) return stored;
+  const generated = `guest-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+  localStorage.setItem(GUEST_STORAGE_KEY, generated);
+  return generated;
+}
+
+function notifyBackendStarting(message: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("orkestron:backend:starting", {
+      detail: { message },
+    }),
+  );
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
+  const guestId = getGuestId();
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(guestId ? { "X-Guest-Id": guestId } : {}),
+        ...options?.headers,
+      },
+    });
+  } catch {
+    notifyBackendStarting("Server is starting, please wait...");
+    throw new Error("Server is starting, please wait...");
+  }
+
+  if ([502, 503, 504].includes(res.status)) {
+    notifyBackendStarting("Server is starting, please wait...");
+    throw new Error("Server is starting, please wait...");
+  }
   if (!res.ok) {
     let serverDetail = "";
     try {
@@ -27,11 +59,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     }
 
     if (res.status === 401) {
-      // Dispatch an event to log the user out on the frontend
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("orkestron:auth:unauthorized"));
-      }
-      throw new Error("Unauthorized");
+      throw new Error(serverDetail || "Unauthorized");
     }
     if (res.status === 429) {
       if (serverDetail) {
@@ -45,7 +73,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-function authHeaders(token: string): Record<string, string> {
+function authHeaders(token?: string | null): Record<string, string> {
+  if (!token || token === "guest") return {};
   return { Authorization: `Bearer ${token}` };
 }
 
