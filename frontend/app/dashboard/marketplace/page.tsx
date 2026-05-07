@@ -134,9 +134,8 @@ const ML_MODEL_OPTIONS = [
 ];
 
 export default function MarketplacePage() {
-  const { accessToken, user, getToken } = useAuth();
-  const token = getToken();
-  const hasAuth = Boolean(accessToken);
+  const { getToken } = useAuth();
+  const token = getToken() || "guest";
 
   const [agents, setAgents] = useState<PlatformAgent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,38 +177,29 @@ export default function MarketplacePage() {
 
   const fetchAgents = useCallback(async () => {
     try {
-      let data: { agents: Record<string, unknown>[]; count: number };
-      if (hasAuth && accessToken) {
-        data = await api.listPlatformAgents(accessToken, {
-          category: categoryFilter || undefined,
-          agent_type: typeFilter || undefined,
-          search: searchQuery || undefined,
-        });
-      } else {
-        data = await api.listPublicAgents({
-          category: categoryFilter || undefined,
-          search: searchQuery || undefined,
-        });
-      }
+      const data = await api.listPlatformAgents(token, {
+        category: categoryFilter || undefined,
+        agent_type: typeFilter || undefined,
+        search: searchQuery || undefined,
+      });
       setAgents((data.agents || []) as unknown as PlatformAgent[]);
     } catch {
       // API unavailable
     } finally {
       setLoading(false);
     }
-  }, [accessToken, hasAuth, categoryFilter, typeFilter, searchQuery]);
+  }, [token, categoryFilter, typeFilter, searchQuery]);
 
   const fetchWorkflows = useCallback(async () => {
-    if (!accessToken) return;
     try {
-      const data = await api.listWorkflows(accessToken);
+      const data = await api.listWorkflows(token);
       setWorkflows(
         (data.workflows || []) as { workflow_id: string; name: string }[],
       );
     } catch {
       /* ignore */
     }
-  }, [accessToken]);
+  }, [token]);
 
   useEffect(() => {
     fetchAgents();
@@ -346,15 +336,13 @@ export default function MarketplacePage() {
           >
             <RefreshCw className="w-4 h-4" />
           </button>
-          {hasAuth && (
-            <button
-              onClick={() => setShowDeploy(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-white text-sm font-medium transition-all shadow-lg shadow-violet-600/20"
-            >
-              <Plus className="w-4 h-4" />
-              Deploy Agent
-            </button>
-          )}
+          <button
+            onClick={() => setShowDeploy(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-white text-sm font-medium transition-all shadow-lg shadow-violet-600/20"
+          >
+            <Plus className="w-4 h-4" />
+            Deploy Agent
+          </button>
         </div>
       </div>
 
