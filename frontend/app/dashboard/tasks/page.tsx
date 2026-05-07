@@ -144,8 +144,8 @@ const EXAMPLE_TASKS = [
 ];
 
 export default function TasksPage() {
-  const { accessToken } = useAuth();
-  const token = accessToken;
+  const { getToken } = useAuth();
+  const token = getToken();
   const [tasks, setTasks] = useState<RealTask[]>([]);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);

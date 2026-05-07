@@ -134,8 +134,9 @@ const ML_MODEL_OPTIONS = [
 ];
 
 export default function MarketplacePage() {
-  const { accessToken, user } = useAuth();
-  const token = accessToken;
+  const { accessToken, user, getToken } = useAuth();
+  const token = getToken();
+  const hasAuth = Boolean(accessToken);
 
   const [agents, setAgents] = useState<PlatformAgent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,8 +179,8 @@ export default function MarketplacePage() {
   const fetchAgents = useCallback(async () => {
     try {
       let data: { agents: Record<string, unknown>[]; count: number };
-      if (token) {
-        data = await api.listPlatformAgents(token, {
+      if (hasAuth && accessToken) {
+        data = await api.listPlatformAgents(accessToken, {
           category: categoryFilter || undefined,
           agent_type: typeFilter || undefined,
           search: searchQuery || undefined,
@@ -196,19 +197,19 @@ export default function MarketplacePage() {
     } finally {
       setLoading(false);
     }
-  }, [token, categoryFilter, typeFilter, searchQuery]);
+  }, [accessToken, hasAuth, categoryFilter, typeFilter, searchQuery]);
 
   const fetchWorkflows = useCallback(async () => {
-    if (!token) return;
+    if (!accessToken) return;
     try {
-      const data = await api.listWorkflows(token);
+      const data = await api.listWorkflows(accessToken);
       setWorkflows(
         (data.workflows || []) as { workflow_id: string; name: string }[],
       );
     } catch {
       /* ignore */
     }
-  }, [token]);
+  }, [accessToken]);
 
   useEffect(() => {
     fetchAgents();
@@ -229,7 +230,7 @@ export default function MarketplacePage() {
   );
 
   const handleExecute = async () => {
-    if (!executeInput.trim() || !token || !selectedAgent || executing) return;
+    if (!executeInput.trim() || !selectedAgent || executing) return;
     setExecuting(true);
     setLiveSteps([]);
     setCurrentRun(null);
@@ -345,7 +346,7 @@ export default function MarketplacePage() {
           >
             <RefreshCw className="w-4 h-4" />
           </button>
-          {token && (
+          {hasAuth && (
             <button
               onClick={() => setShowDeploy(true)}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 text-white text-sm font-medium transition-all shadow-lg shadow-violet-600/20"
