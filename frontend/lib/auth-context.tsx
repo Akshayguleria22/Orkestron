@@ -8,6 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import { api } from "@/lib/api-client";
 
 interface User {
   id: string;
@@ -40,7 +41,6 @@ interface AuthContextValue extends AuthState {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const AUTH_STORAGE_KEY = "orkestron_auth";
 const GUEST_STORAGE_KEY = "orkestron_guest_id";
 
@@ -104,7 +104,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: true,
       isLoading: false,
     });
-    void fetch(`${API_URL}/health`).catch(() => undefined);
+    let cancelled = false;
+
+    const warmBackend = async () => {
+      const maxAttempts = 20;
+      const delayMs = 3000;
+      for (let attempt = 0; attempt < maxAttempts && !cancelled; attempt += 1) {
+        try {
+          await api.health();
+          return;
+        } catch {
+          if (attempt < maxAttempts - 1) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+        }
+      }
+    };
+
+    void warmBackend();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const loginWithGoogle = useCallback(() => undefined, []);
